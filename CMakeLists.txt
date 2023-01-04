@@ -1,0 +1,72 @@
+cmake_minimum_required(VERSION 3.22)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+project(jsc C)
+
+if(NOT TARGET uv)
+  add_subdirectory(vendor/libuv EXCLUDE_FROM_ALL)
+endif()
+
+if(NOT TARGET js)
+  add_subdirectory(vendor/libjs EXCLUDE_FROM_ALL)
+endif()
+
+add_library(jsc OBJECT)
+
+set_target_properties(
+  jsc
+  PROPERTIES
+  C_STANDARD 99
+  POSITION_INDEPENDENT_CODE 1
+)
+
+target_sources(
+  jsc
+  PRIVATE
+    src/jsc.c
+)
+
+target_include_directories(
+  jsc
+  PUBLIC
+    include
+    $<TARGET_PROPERTY:js,INCLUDE_DIRECTORIES>
+)
+
+add_library(jsc_shared SHARED $<TARGET_OBJECTS:jsc>)
+
+set_target_properties(
+  jsc_shared
+  PROPERTIES
+  OUTPUT_NAME jsc
+)
+
+target_link_libraries(
+  jsc_shared
+  PUBLIC
+    uv
+    "-framework JavaScriptCore"
+)
+
+add_library(jsc_static STATIC $<TARGET_OBJECTS:jsc>)
+
+set_target_properties(
+  jsc_static
+  PROPERTIES
+  OUTPUT_NAME jsc
+)
+
+target_link_libraries(
+  jsc_static
+  PUBLIC
+    uv_a
+    "-framework JavaScriptCore"
+)
+
+install(TARGETS jsc_shared jsc_static)
+
+if(PROJECT_IS_TOP_LEVEL)
+  enable_testing()
+  add_subdirectory(test)
+endif()
