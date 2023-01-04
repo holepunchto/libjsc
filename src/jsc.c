@@ -10,8 +10,6 @@ struct js_platform_s {
 
 struct js_env_s {
   uv_loop_t *loop;
-  uv_prepare_t prepare;
-  uv_check_t check;
   js_platform_t *platform;
   JSGlobalContextRef context;
   JSValueRef exception;
@@ -45,40 +43,6 @@ js_get_platform_loop (js_platform_t *platform, uv_loop_t **result) {
   return 0;
 }
 
-static inline void
-run_microtasks (js_env_t *env) {
-}
-
-static void
-on_prepare (uv_prepare_t *handle);
-
-static inline void
-check_liveness (js_env_t *env) {
-  if (true /* macrotask queue empty */) {
-    uv_prepare_stop(&env->prepare);
-  } else {
-    uv_prepare_start(&env->prepare, on_prepare);
-  }
-}
-
-static void
-on_prepare (uv_prepare_t *handle) {
-  js_env_t *env = (js_env_t *) handle->data;
-
-  check_liveness(env);
-}
-
-static void
-on_check (uv_check_t *handle) {
-  js_env_t *env = (js_env_t *) handle->data;
-
-  run_microtasks(env);
-
-  if (uv_loop_alive(env->loop)) return;
-
-  check_liveness(env);
-}
-
 int
 js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
   JSGlobalContextRef context = JSGlobalContextCreate(NULL);
@@ -89,19 +53,6 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
   env->platform = platform;
   env->context = context;
   env->exception = NULL;
-
-  uv_prepare_init(loop, &env->prepare);
-  uv_prepare_start(&env->prepare, on_prepare);
-  env->prepare.data = (void *) env;
-
-  uv_check_init(loop, &env->check);
-  uv_check_start(&env->check, on_check);
-  env->check.data = (void *) env;
-
-  // The check handle should not on its own keep the loop alive; it's simply
-  // used for running any outstanding tasks that might cause additional work
-  // to be queued.
-  uv_unref((uv_handle_t *) (&env->check));
 
   *result = env;
 
