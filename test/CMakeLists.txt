@@ -1,5 +1,11 @@
 list(APPEND tests
+  create-function
+  create-function-args-extra
+  create-function-args-fewer
+  create-function-throw
+  create-function-throw-indirect
   run-script
+  run-script-throw
 )
 
 foreach(test IN LISTS tests)
