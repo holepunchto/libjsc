@@ -267,7 +267,17 @@ js_create_uint32 (js_env_t *env, uint32_t value, js_value_t **result) {
 
 int
 js_create_string_utf8 (js_env_t *env, const char *str, size_t len, js_value_t **result) {
-  JSStringRef ref = JSStringCreateWithUTF8CString(str);
+  JSStringRef ref;
+
+  if (len == (size_t) -1) {
+    ref = JSStringCreateWithUTF8CString(str);
+  } else {
+    char *copy = strndup(str, len);
+
+    ref = JSStringCreateWithUTF8CString(copy);
+
+    free(copy);
+  }
 
   *result = (js_value_t *) JSValueMakeString(env->context, ref);
 
@@ -329,7 +339,17 @@ static JSClassDefinition js_function_finalizer = {
 
 int
 js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb cb, void *data, js_value_t **result) {
-  JSStringRef ref = JSStringCreateWithUTF8CString(name);
+  JSStringRef ref;
+
+  if (len == (size_t) -1) {
+    ref = JSStringCreateWithUTF8CString(name);
+  } else {
+    char *copy = strndup(name, len);
+
+    ref = JSStringCreateWithUTF8CString(name);
+
+    free(copy);
+  }
 
   JSObjectRef function = JSObjectMakeFunctionWithCallback(env->context, ref, on_function_call);
 
