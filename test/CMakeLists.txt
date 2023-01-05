@@ -7,6 +7,7 @@ list(APPEND tests
   create-reference
   run-script
   run-script-throw
+  wasm
 )
 
 foreach(test IN LISTS tests)
