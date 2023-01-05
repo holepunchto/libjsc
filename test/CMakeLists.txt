@@ -7,6 +7,7 @@ list(APPEND tests
   create-reference
   run-script
   run-script-throw
+  set-named-property
   wasm
 )
 
