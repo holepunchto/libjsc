@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <uv.h>
 
 #include <JavaScriptCore/JavaScriptCore.h>
@@ -23,7 +24,7 @@ struct js_env_s {
 };
 
 struct js_ref_s {
-  JSValueRef value;
+  JSObjectRef value;
   uint32_t count;
 };
 
@@ -153,6 +154,99 @@ js_run_script (js_env_t *env, js_value_t *source, js_value_t **result) {
   if (env->exception) return -1;
 
   *result = (js_value_t *) value;
+
+  return 0;
+}
+
+static void
+on_reference_finalize (JSObjectRef external) {
+  js_ref_t *reference = (js_ref_t *) JSObjectGetPrivate(external);
+
+  if (reference) reference->value = NULL;
+}
+
+static JSClassDefinition js_reference_finalizer = {
+  .finalize = on_reference_finalize,
+};
+
+int
+js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t **result) {
+  js_ref_t *reference = malloc(sizeof(js_ref_t));
+
+  reference->value = (JSObjectRef) value;
+  reference->count = count;
+
+  if (reference->count > 0) JSValueProtect(env->context, reference->value);
+
+  {
+    JSClassRef class = JSClassCreate(&js_reference_finalizer);
+
+    JSObjectRef external = JSObjectMake(env->context, class, (void *) reference);
+
+    JSClassRelease(class);
+
+    JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
+
+    JSObjectSetProperty(env->context, (JSObjectRef) value, ref, external, 0, NULL);
+
+    JSStringRelease(ref);
+  }
+
+  *result = reference;
+
+  return 0;
+}
+
+int
+js_delete_reference (js_env_t *env, js_ref_t *reference) {
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
+
+  JSValueRef external = JSObjectGetProperty(env->context, reference->value, ref, NULL);
+
+  JSStringRelease(ref);
+
+  JSObjectSetPrivate((JSObjectRef) external, NULL);
+
+  if (reference->count > 0) JSValueUnprotect(env->context, reference->value);
+
+  free(reference);
+
+  return 0;
+}
+
+int
+js_reference_ref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
+  reference->count++;
+
+  if (reference->count == 1) JSValueProtect(env->context, reference->value);
+
+  if (result != NULL) {
+    *result = reference->count;
+  }
+
+  return 0;
+}
+
+int
+js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
+  if (reference->count == 0) {
+    return -1;
+  }
+
+  reference->count--;
+
+  if (reference->count == 0) JSValueUnprotect(env->context, reference->value);
+
+  if (result != NULL) {
+    *result = reference->count;
+  }
+
+  return 0;
+}
+
+int
+js_get_reference_value (js_env_t *env, js_ref_t *reference, js_value_t **result) {
+  *result = (js_value_t *) reference->value;
 
   return 0;
 }

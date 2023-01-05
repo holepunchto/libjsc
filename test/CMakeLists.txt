@@ -4,6 +4,7 @@ list(APPEND tests
   create-function-args-fewer
   create-function-throw
   create-function-throw-indirect
+  create-reference
   run-script
   run-script-throw
 )
