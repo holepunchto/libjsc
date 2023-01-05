@@ -1,4 +1,7 @@
 list(APPEND tests
+  call-function
+  call-function-ignore-return
+  call-function-throw
   create-function
   create-function-args-extra
   create-function-args-fewer

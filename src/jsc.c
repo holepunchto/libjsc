@@ -648,6 +648,24 @@ js_set_named_property (js_env_t *env, js_value_t *object, const char *name, js_v
 }
 
 int
+js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
+  JSValueRef value = JSObjectCallAsFunction(env->context, (JSObjectRef) function, (JSObjectRef) receiver, argc, (const JSValueRef *) argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (result != NULL) {
+    *result = (js_value_t *) value;
+  }
+
+  return 0;
+}
+
+int
+js_make_callback (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
+  return js_call_function(env, receiver, function, argc, argv, result);
+}
+
+int
 js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *argc, js_value_t *argv[], js_value_t **self, void **data) {
   if (argv != NULL) {
     size_t i = 0, n = info->argc < *argc ? info->argc : *argc;
