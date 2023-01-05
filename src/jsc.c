@@ -683,6 +683,114 @@ js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *arg
 }
 
 int
+js_get_arraybuffer_info (js_env_t *env, js_value_t *arraybuffer, void **pdata, size_t *plen) {
+  uint8_t *data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &env->exception);
+
+  if (env->exception) return -1;
+
+  size_t len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (pdata != NULL) {
+    *pdata = data;
+  }
+
+  if (plen != NULL) {
+    *plen = len;
+  }
+
+  return 0;
+}
+
+int
+js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_type_t *ptype, void **pdata, size_t *plen, js_value_t **parraybuffer, size_t *poffset) {
+  JSObjectRef arraybuffer;
+
+  if (pdata != NULL || parraybuffer != NULL) {
+    arraybuffer = JSObjectGetTypedArrayBuffer(env->context, (JSObjectRef) typedarray, &env->exception);
+
+    if (env->exception) return -1;
+  }
+
+  if (ptype != NULL) {
+    JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) typedarray, &env->exception);
+
+    if (env->exception) return -1;
+
+    switch (type) {
+    case kJSTypedArrayTypeInt8Array:
+      *ptype = js_int8_array;
+      break;
+    case kJSTypedArrayTypeInt16Array:
+      *ptype = js_int16_array;
+      break;
+    case kJSTypedArrayTypeInt32Array:
+      *ptype = js_int32_array;
+      break;
+    case kJSTypedArrayTypeUint8Array:
+      *ptype = js_uint8_array;
+      break;
+    case kJSTypedArrayTypeUint8ClampedArray:
+      *ptype = js_uint8_clamped_array;
+      break;
+    case kJSTypedArrayTypeUint16Array:
+      *ptype = js_uint16_array;
+      break;
+    case kJSTypedArrayTypeUint32Array:
+      *ptype = js_uint32_array;
+      break;
+    case kJSTypedArrayTypeFloat32Array:
+      *ptype = js_float32_array;
+      break;
+    case kJSTypedArrayTypeFloat64Array:
+      *ptype = js_float64_array;
+      break;
+    case kJSTypedArrayTypeBigInt64Array:
+      *ptype = js_bigint64_array;
+      break;
+    case kJSTypedArrayTypeBigUint64Array:
+      *ptype = js_biguint64_array;
+      break;
+
+    case kJSTypedArrayTypeArrayBuffer:
+    case kJSTypedArrayTypeNone:
+      break;
+    }
+  }
+
+  if (pdata != NULL) {
+    void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
+
+    if (env->exception) return -1;
+
+    *pdata = data;
+  }
+
+  if (plen != NULL) {
+    size_t len = JSObjectGetTypedArrayLength(env->context, (JSObjectRef) typedarray, &env->exception);
+
+    if (env->exception) return -1;
+
+    *plen = len;
+  }
+
+  if (parraybuffer != NULL) {
+    *parraybuffer = (js_value_t *) arraybuffer;
+  }
+
+  if (poffset != NULL) {
+    size_t offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &env->exception);
+
+    if (env->exception) return -1;
+
+    *poffset = offset;
+  }
+
+  return 0;
+}
+
+int
 js_throw (js_env_t *env, js_value_t *error) {
   env->exception = (JSValueRef) error;
 

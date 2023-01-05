@@ -5,6 +5,9 @@ list(APPEND tests
   create-function-throw
   create-function-throw-indirect
   create-reference
+  get-arraybuffer-info
+  get-typedarray-info-uint8array
+  get-typedarray-info-uint16array
   run-script
   run-script-throw
   set-named-property
