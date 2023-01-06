@@ -47,6 +47,10 @@ struct js_callback_info_s {
   JSObjectRef receiver;
 };
 
+const char *js_platform_identifier = "javascriptcore";
+
+const char *js_platform_version = NULL;
+
 int
 js_create_platform (uv_loop_t *loop, const js_platform_options_t *options, js_platform_t **result) {
   js_platform_t *platform = malloc(sizeof(js_platform_t));
