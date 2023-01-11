@@ -21,8 +21,6 @@ struct js_env_s {
   js_platform_t *platform;
   JSGlobalContextRef context;
   JSValueRef exception;
-  js_uncaught_exception_cb on_uncaught_exception;
-  void *uncaught_exception_data;
 };
 
 struct js_ref_s {
@@ -112,10 +110,7 @@ js_destroy_env (js_env_t *env) {
 
 int
 js_on_uncaught_exception (js_env_t *env, js_uncaught_exception_cb cb, void *data) {
-  env->on_uncaught_exception = cb;
-  env->uncaught_exception_data = data;
-
-  return 0;
+  return -1;
 }
 
 int
