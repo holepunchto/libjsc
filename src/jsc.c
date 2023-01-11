@@ -21,6 +21,7 @@ struct js_env_s {
   js_platform_t *platform;
   JSGlobalContextRef context;
   JSValueRef exception;
+  int64_t external_memory;
 };
 
 struct js_ref_s {
@@ -93,6 +94,7 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
   env->platform = platform;
   env->context = context;
   env->exception = NULL;
+  env->external_memory = 0;
 
   *result = env;
 
@@ -1406,7 +1408,13 @@ js_queue_macrotask (js_env_t *env, js_task_cb cb, void *data, uint64_t delay) {
 
 int
 js_adjust_external_memory (js_env_t *env, int64_t change_in_bytes, int64_t *result) {
-  return -1;
+  env->external_memory += change_in_bytes;
+
+  if (result) {
+    *result = env->external_memory;
+  }
+
+  return 0;
 }
 
 int
