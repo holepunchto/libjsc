@@ -168,7 +168,9 @@ js_run_script (js_env_t *env, js_value_t *source, js_value_t **result) {
 
   if (env->exception) return -1;
 
-  *result = (js_value_t *) value;
+  if (result) {
+    *result = (js_value_t *) value;
+  }
 
   return 0;
 }
@@ -300,19 +302,88 @@ js_get_reference_value (js_env_t *env, js_ref_t *reference, js_value_t **result)
   return 0;
 }
 
+static void
+on_wrap_finalize (JSObjectRef external) {
+  js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate(external);
+
+  if (finalizer->cb) {
+    finalizer->cb(finalizer->env, finalizer->data, finalizer->hint);
+  }
+
+  free(finalizer);
+}
+
+static JSClassDefinition js_wrap_finalizer = {
+  .finalize = on_wrap_finalize,
+};
+
 int
 js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
-  return -1;
+  js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
+
+  finalizer->env = env;
+  finalizer->data = data;
+  finalizer->cb = finalize_cb;
+  finalizer->hint = finalize_hint;
+
+  JSClassRef class = JSClassCreate(&js_wrap_finalizer);
+
+  JSObjectRef external = JSObjectMake(env->context, class, (void *) finalizer);
+
+  JSClassRelease(class);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
+
+  JSObjectSetProperty(
+    env->context,
+    (JSObjectRef) object,
+    ref,
+    external,
+    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
+    NULL
+  );
+
+  JSStringRelease(ref);
+
+  if (result) js_create_reference(env, object, 0, result);
+
+  return 0;
 }
 
 int
 js_unwrap (js_env_t *env, js_value_t *object, void **result) {
-  return -1;
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
+
+  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+
+  JSStringRelease(ref);
+
+  js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
+
+  *result = finalizer->data;
+
+  return 0;
 }
 
 int
 js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
-  return -1;
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
+
+  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+
+  js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
+
+  finalizer->cb = NULL;
+
+  if (result) {
+    *result = finalizer->data;
+  }
+
+  JSObjectDeleteProperty(env->context, (JSObjectRef) object, ref, NULL);
+
+  JSStringRelease(ref);
+
+  return 0;
 }
 
 int
@@ -619,12 +690,56 @@ js_reject_deferred (js_env_t *env, js_deferred_t *deferred, js_value_t *resoluti
 
 int
 js_create_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
-  return -1;
+  JSObjectRef typedarray = JSObjectMakeTypedArray(env->context, kJSTypedArrayTypeUint8Array, len, &env->exception);
+
+  if (env->exception) return -1;
+
+  JSObjectRef arraybuffer = JSObjectGetTypedArrayBuffer(env->context, typedarray, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = (js_value_t *) arraybuffer;
+
+  if (data) {
+    *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
+
+    if (env->exception) return -1;
+  }
+
+  return 0;
+}
+
+static void
+on_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
+  js_finalizer_t *finalizer = (js_finalizer_t *) deallocatorContext;
+
+  if (finalizer->cb) {
+    finalizer->cb(finalizer->env, finalizer->data, finalizer->hint);
+  }
+
+  free(finalizer);
 }
 
 int
 js_create_external_arraybuffer (js_env_t *env, void *data, size_t len, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
-  return -1;
+  js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
+
+  finalizer->env = env;
+  finalizer->data = data;
+  finalizer->cb = finalize_cb;
+  finalizer->hint = finalize_hint;
+
+  JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, data, len, on_arraybuffer_finalize, (void *) finalizer, &env->exception);
+
+  if (env->exception) {
+    free(finalizer);
+
+    return -1;
+  }
+
+  *result = (js_value_t *) arraybuffer;
+
+  return 0;
 }
 
 int
@@ -632,9 +747,83 @@ js_detach_arraybuffer (js_env_t *env, js_value_t *arraybuffer) {
   return -1;
 }
 
+static inline JSTypedArrayType
+js_convert_from_typedarray_type (js_typedarray_type_t type) {
+  switch (type) {
+  case js_int8_array:
+    return kJSTypedArrayTypeInt8Array;
+  case js_uint8_array:
+    return kJSTypedArrayTypeUint8Array;
+  case js_uint8_clamped_array:
+    return kJSTypedArrayTypeUint8ClampedArray;
+  case js_int16_array:
+    return kJSTypedArrayTypeInt16Array;
+  case js_uint16_array:
+    return kJSTypedArrayTypeUint16Array;
+  case js_int32_array:
+    return kJSTypedArrayTypeInt32Array;
+  case js_uint32_array:
+    return kJSTypedArrayTypeUint32Array;
+  case js_float32_array:
+    return kJSTypedArrayTypeFloat32Array;
+  case js_float64_array:
+    return kJSTypedArrayTypeFloat64Array;
+  case js_bigint64_array:
+    return kJSTypedArrayTypeBigInt64Array;
+  case js_biguint64_array:
+    return kJSTypedArrayTypeBigUint64Array;
+  }
+}
+
+static inline js_typedarray_type_t
+js_convert_to_typedarray_type (JSTypedArrayType type) {
+  switch (type) {
+  case kJSTypedArrayTypeInt8Array:
+    return js_int8_array;
+  case kJSTypedArrayTypeInt16Array:
+    return js_int16_array;
+    break;
+  case kJSTypedArrayTypeInt32Array:
+    return js_int32_array;
+  case kJSTypedArrayTypeUint8Array:
+    return js_uint8_array;
+  case kJSTypedArrayTypeUint8ClampedArray:
+    return js_uint8_clamped_array;
+  case kJSTypedArrayTypeUint16Array:
+    return js_uint16_array;
+  case kJSTypedArrayTypeUint32Array:
+    return js_uint32_array;
+  case kJSTypedArrayTypeFloat32Array:
+    return js_float32_array;
+  case kJSTypedArrayTypeFloat64Array:
+    return js_float64_array;
+  case kJSTypedArrayTypeBigInt64Array:
+    return js_bigint64_array;
+  case kJSTypedArrayTypeBigUint64Array:
+    return js_biguint64_array;
+
+  case kJSTypedArrayTypeArrayBuffer:
+  case kJSTypedArrayTypeNone:
+    return -1;
+  }
+}
+
 int
 js_create_typedarray (js_env_t *env, js_typedarray_type_t type, size_t len, js_value_t *arraybuffer, size_t offset, js_value_t **result) {
-  return -1;
+  JSObjectRef typedarray = JSObjectMakeTypedArrayWithArrayBufferAndOffset(
+    env->context,
+    js_convert_from_typedarray_type(type),
+    (JSObjectRef) arraybuffer,
+    offset,
+    len,
+    &env->exception
+  );
+
+  if (env->exception) return -1;
+
+  *result = (js_value_t *) typedarray;
+
+  return 0;
 }
 
 int
@@ -1198,45 +1387,7 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
 
     if (env->exception) return -1;
 
-    switch (type) {
-    case kJSTypedArrayTypeInt8Array:
-      *ptype = js_int8_array;
-      break;
-    case kJSTypedArrayTypeInt16Array:
-      *ptype = js_int16_array;
-      break;
-    case kJSTypedArrayTypeInt32Array:
-      *ptype = js_int32_array;
-      break;
-    case kJSTypedArrayTypeUint8Array:
-      *ptype = js_uint8_array;
-      break;
-    case kJSTypedArrayTypeUint8ClampedArray:
-      *ptype = js_uint8_clamped_array;
-      break;
-    case kJSTypedArrayTypeUint16Array:
-      *ptype = js_uint16_array;
-      break;
-    case kJSTypedArrayTypeUint32Array:
-      *ptype = js_uint32_array;
-      break;
-    case kJSTypedArrayTypeFloat32Array:
-      *ptype = js_float32_array;
-      break;
-    case kJSTypedArrayTypeFloat64Array:
-      *ptype = js_float64_array;
-      break;
-    case kJSTypedArrayTypeBigInt64Array:
-      *ptype = js_bigint64_array;
-      break;
-    case kJSTypedArrayTypeBigUint64Array:
-      *ptype = js_biguint64_array;
-      break;
-
-    case kJSTypedArrayTypeArrayBuffer:
-    case kJSTypedArrayTypeNone:
-      break;
-    }
+    *ptype = js_convert_to_typedarray_type(type);
   }
 
   if (pdata) {
