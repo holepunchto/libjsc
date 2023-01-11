@@ -16,6 +16,7 @@ list(APPEND tests
   get-arraybuffer-info
   get-typedarray-info-uint8array
   get-typedarray-info-uint16array
+  make-callback
   run-script
   run-script-ignore-return
   run-script-throw
