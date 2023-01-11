@@ -2,6 +2,8 @@ list(APPEND tests
   call-function
   call-function-ignore-return
   call-function-throw
+  create-external
+  create-external-with-finalizer
   create-function
   create-function-args-extra
   create-function-args-fewer
@@ -12,6 +14,7 @@ list(APPEND tests
   get-typedarray-info-uint8array
   get-typedarray-info-uint16array
   run-script
+  run-script-ignore-return
   run-script-throw
   set-named-property
   wasm

@@ -9,6 +9,7 @@
 #include <JavaScriptCore/JavaScriptCore.h>
 
 typedef struct js_callback_s js_callback_t;
+typedef struct js_finalizer_s js_finalizer_t;
 
 struct js_platform_s {
   js_platform_options_t options;
@@ -32,6 +33,13 @@ struct js_ref_s {
 struct js_deferred_s {
   JSObjectRef resolve;
   JSObjectRef reject;
+};
+
+struct js_finalizer_s {
+  js_env_t *env;
+  void *data;
+  js_finalize_cb cb;
+  void *hint;
 };
 
 struct js_callback_s {
@@ -111,6 +119,11 @@ js_on_uncaught_exception (js_env_t *env, js_uncaught_exception_cb cb, void *data
 }
 
 int
+js_on_unhandled_rejection (js_env_t *env, js_unhandled_rejection_cb cb, void *data) {
+  return -1;
+}
+
+int
 js_get_env_loop (js_env_t *env, uv_loop_t **result) {
   *result = env->loop;
 
@@ -163,6 +176,31 @@ js_run_script (js_env_t *env, js_value_t *source, js_value_t **result) {
   return 0;
 }
 
+int
+js_create_module (js_env_t *env, const char *name, size_t len, js_value_t *source, js_module_cb cb, void *data, js_module_t **result) {
+  return -1;
+}
+
+int
+js_create_synthetic_module (js_env_t *env, const char *name, size_t len, js_value_t *const export_names[], size_t names_len, js_synthetic_module_cb cb, void *data, js_module_t **result) {
+  return -1;
+}
+
+int
+js_delete_module (js_env_t *env, js_module_t *module) {
+  return -1;
+}
+
+int
+js_set_module_export (js_env_t *env, js_module_t *module, js_value_t *name, js_value_t *value) {
+  return -1;
+}
+
+int
+js_run_module (js_env_t *env, js_module_t *module, js_value_t **result) {
+  return -1;
+}
+
 static void
 on_reference_finalize (JSObjectRef external) {
   js_ref_t *reference = (js_ref_t *) JSObjectGetPrivate(external);
@@ -192,7 +230,14 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
 
     JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
 
-    JSObjectSetProperty(env->context, (JSObjectRef) value, ref, external, 0, NULL);
+    JSObjectSetProperty(
+      env->context,
+      (JSObjectRef) value,
+      ref,
+      external,
+      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+      NULL
+    );
 
     JSStringRelease(ref);
   }
@@ -225,7 +270,7 @@ js_reference_ref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
 
   if (reference->count == 1) JSValueProtect(env->context, reference->value);
 
-  if (result != NULL) {
+  if (result) {
     *result = reference->count;
   }
 
@@ -235,6 +280,8 @@ js_reference_ref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
 int
 js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
   if (reference->count == 0) {
+    js_throw_error(env, NULL, "Cannot decrease reference count");
+
     return -1;
   }
 
@@ -242,7 +289,7 @@ js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
 
   if (reference->count == 0) JSValueUnprotect(env->context, reference->value);
 
-  if (result != NULL) {
+  if (result) {
     *result = reference->count;
   }
 
@@ -254,6 +301,21 @@ js_get_reference_value (js_env_t *env, js_ref_t *reference, js_value_t **result)
   *result = (js_value_t *) reference->value;
 
   return 0;
+}
+
+int
+js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
+  return -1;
+}
+
+int
+js_unwrap (js_env_t *env, js_value_t *object, void **result) {
+  return -1;
+}
+
+int
+js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
+  return -1;
 }
 
 int
@@ -271,6 +333,30 @@ js_create_uint32 (js_env_t *env, uint32_t value, js_value_t **result) {
 }
 
 int
+js_create_int64 (js_env_t *env, int64_t value, js_value_t **result) {
+  *result = (js_value_t *) JSValueMakeNumber(env->context, (double) value);
+
+  return 0;
+}
+
+int
+js_create_double (js_env_t *env, double value, js_value_t **result) {
+  *result = (js_value_t *) JSValueMakeNumber(env->context, value);
+
+  return 0;
+}
+
+int
+js_create_bigint_int64 (js_env_t *env, int64_t value, js_value_t **result) {
+  return -1;
+}
+
+int
+js_create_bigint_uint64 (js_env_t *env, uint64_t value, js_value_t **result) {
+  return -1;
+}
+
+int
 js_create_string_utf8 (js_env_t *env, const char *str, size_t len, js_value_t **result) {
   JSStringRef ref;
 
@@ -285,6 +371,19 @@ js_create_string_utf8 (js_env_t *env, const char *str, size_t len, js_value_t **
   }
 
   *result = (js_value_t *) JSValueMakeString(env->context, ref);
+
+  JSStringRelease(ref);
+
+  return 0;
+}
+
+int
+js_create_symbol (js_env_t *env, js_value_t *description, js_value_t **result) {
+  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) description, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = (js_value_t *) JSValueMakeSymbol(env->context, ref);
 
   JSStringRelease(ref);
 
@@ -375,7 +474,14 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
 
     JSStringRef ref = JSStringCreateWithUTF8CString("__native_function");
 
-    JSObjectSetProperty(env->context, function, ref, external, 0, NULL);
+    JSObjectSetProperty(
+      env->context,
+      function,
+      ref,
+      external,
+      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+      NULL
+    );
 
     JSStringRelease(ref);
   }
@@ -383,6 +489,94 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
   *result = (js_value_t *) function;
 
   return 0;
+}
+
+int
+js_create_array (js_env_t *env, js_value_t **result) {
+  *result = JSObjectMakeArray(env->context, 0, NULL, env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
+}
+
+int
+js_create_array_with_length (js_env_t *env, size_t len, js_value_t **result) {
+  JSValueRef argv[1] = {JSValueMakeNumber(env->context, (double) len)};
+
+  *result = JSObjectMakeArray(env->context, 1, argv, env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
+}
+
+static void
+on_external_finalize (JSObjectRef external) {
+  js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate(external);
+
+  if (finalizer->cb) {
+    finalizer->cb(finalizer->env, finalizer->data, finalizer->hint);
+  }
+
+  free(finalizer);
+}
+
+static JSClassDefinition js_external_finalizer = {
+  .finalize = on_external_finalize,
+};
+
+int
+js_create_external (js_env_t *env, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
+  js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
+
+  finalizer->env = env;
+  finalizer->data = data;
+  finalizer->cb = finalize_cb;
+  finalizer->hint = finalize_hint;
+
+  JSClassRef class = JSClassCreate(&js_external_finalizer);
+
+  JSObjectRef external = JSObjectMake(env->context, class, (void *) finalizer);
+
+  JSClassRelease(class);
+
+  *result = (js_value_t *) external;
+
+  return 0;
+}
+
+int
+js_create_date (js_env_t *env, double time, js_value_t **result) {
+  return -1;
+}
+
+int
+js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
+  JSValueRef argv[1] = {(JSValueRef) message};
+
+  JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = (js_value_t *) error;
+
+  return 0;
+}
+
+int
+js_create_type_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
+  return -1;
+}
+
+int
+js_create_range_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
+  return -1;
+}
+
+int
+js_create_syntax_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
+  return -1;
 }
 
 int
@@ -427,21 +621,61 @@ js_reject_deferred (js_env_t *env, js_deferred_t *deferred, js_value_t *resoluti
 }
 
 int
-js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
-  JSValueRef argv[1] = {(JSValueRef) message};
+js_create_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
+  return -1;
+}
 
-  JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &env->exception);
+int
+js_create_external_arraybuffer (js_env_t *env, void *data, size_t len, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
+  return -1;
+}
 
-  if (env->exception) return -1;
+int
+js_detach_arraybuffer (js_env_t *env, js_value_t *arraybuffer) {
+  return -1;
+}
 
-  *result = (js_value_t *) error;
+int
+js_create_typedarray (js_env_t *env, js_typedarray_type_t type, size_t len, js_value_t *arraybuffer, size_t offset, js_value_t **result) {
+  return -1;
+}
 
-  return 0;
+int
+js_create_dataview (js_env_t *env, size_t len, js_value_t *arraybuffer, size_t offset, js_value_t **result) {
+  return -1;
 }
 
 int
 js_typeof (js_env_t *env, js_value_t *value, js_value_type_t *result) {
-  return -1;
+  JSType type = JSValueGetType(env->context, (JSValueRef) value);
+
+  switch (type) {
+  case kJSTypeUndefined:
+    *result = js_undefined;
+    break;
+  case kJSTypeNull:
+    *result = js_null;
+    break;
+  case kJSTypeBoolean:
+    *result = js_boolean;
+    break;
+  case kJSTypeNumber:
+    *result = js_number;
+    break;
+  case kJSTypeString:
+    *result = js_string;
+    break;
+  case kJSTypeObject:
+    *result = JSObjectIsFunction(env->context, (JSObjectRef) value)
+                ? js_function
+                : js_object;
+    break;
+  case kJSTypeSymbol:
+    *result = js_symbol;
+    break;
+  }
+
+  return 0;
 }
 
 int
@@ -540,6 +774,11 @@ js_is_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_is_detached_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
+  return -1;
+}
+
+int
 js_is_typedarray (js_env_t *env, js_value_t *value, bool *result) {
   return -1;
 }
@@ -564,13 +803,6 @@ js_get_global (js_env_t *env, js_value_t **result) {
 }
 
 int
-js_get_null (js_env_t *env, js_value_t **result) {
-  *result = (js_value_t *) JSValueMakeNull(env->context);
-
-  return 0;
-}
-
-int
 js_get_undefined (js_env_t *env, js_value_t **result) {
   *result = (js_value_t *) JSValueMakeUndefined(env->context);
 
@@ -578,8 +810,22 @@ js_get_undefined (js_env_t *env, js_value_t **result) {
 }
 
 int
+js_get_null (js_env_t *env, js_value_t **result) {
+  *result = (js_value_t *) JSValueMakeNull(env->context);
+
+  return 0;
+}
+
+int
 js_get_boolean (js_env_t *env, bool value, js_value_t **result) {
   *result = (js_value_t *) JSValueMakeBoolean(env->context, value);
+
+  return 0;
+}
+
+int
+js_get_value_bool (js_env_t *env, js_value_t *value, bool *result) {
+  *result = JSValueToBoolean(env->context, (JSValueRef) value);
 
   return 0;
 }
@@ -607,6 +853,38 @@ js_get_value_uint32 (js_env_t *env, js_value_t *value, uint32_t *result) {
 }
 
 int
+js_get_value_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
+  double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = (int64_t) number;
+
+  return 0;
+}
+
+int
+js_get_value_double (js_env_t *env, js_value_t *value, double *result) {
+  double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = number;
+
+  return 0;
+}
+
+int
+js_get_value_bigint_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
+  return -1;
+}
+
+int
+js_get_value_bigint_uint64 (js_env_t *env, js_value_t *value, uint64_t *result) {
+  return -1;
+}
+
+int
 js_get_value_string_utf8 (js_env_t *env, js_value_t *value, char *str, size_t len, size_t *result) {
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
 
@@ -614,7 +892,7 @@ js_get_value_string_utf8 (js_env_t *env, js_value_t *value, char *str, size_t le
 
   len = JSStringGetUTF8CString(ref, str, len);
 
-  if (result != NULL) {
+  if (result) {
     *result = len;
   }
 
@@ -622,6 +900,33 @@ js_get_value_string_utf8 (js_env_t *env, js_value_t *value, char *str, size_t le
 
   return 0;
 }
+
+int
+js_get_value_external (js_env_t *env, js_value_t *value, void **result) {
+  js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) value);
+
+  *result = finalizer->data;
+
+  return 0;
+}
+
+int
+js_get_value_date (js_env_t *env, js_value_t *value, double *result);
+
+int
+js_get_array_length (js_env_t *env, js_value_t *value, uint32_t *result);
+
+int
+js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t **result);
+
+int
+js_has_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result);
+
+int
+js_set_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *value);
+
+int
+js_delete_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result);
 
 int
 js_get_named_property (js_env_t *env, js_value_t *object, const char *name, js_value_t **result) {
@@ -634,6 +939,17 @@ js_get_named_property (js_env_t *env, js_value_t *object, const char *name, js_v
   if (env->exception) return -1;
 
   *result = (js_value_t *) value;
+
+  return 0;
+}
+
+int
+js_has_named_property (js_env_t *env, js_value_t *object, const char *name, bool *result) {
+  JSStringRef ref = JSStringCreateWithUTF8CString(name);
+
+  *result = JSObjectHasProperty(env->context, (JSObjectRef) object, ref);
+
+  JSStringRelease(ref);
 
   return 0;
 }
@@ -652,26 +968,37 @@ js_set_named_property (js_env_t *env, js_value_t *object, const char *name, js_v
 }
 
 int
-js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
-  JSValueRef value = JSObjectCallAsFunction(env->context, (JSObjectRef) function, (JSObjectRef) receiver, argc, (const JSValueRef *) argv, &env->exception);
+js_delete_named_property (js_env_t *env, js_value_t *object, const char *name, bool *result) {
+  JSStringRef ref = JSStringCreateWithUTF8CString(name);
+
+  bool value = JSObjectDeleteProperty(env->context, (JSObjectRef) object, ref, &env->exception);
+
+  JSStringRelease(ref);
 
   if (env->exception) return -1;
 
-  if (result != NULL) {
-    *result = (js_value_t *) value;
+  if (result) {
+    *result = value;
   }
 
   return 0;
 }
 
 int
-js_make_callback (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
-  return js_call_function(env, receiver, function, argc, argv, result);
-}
+js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **result);
+
+int
+js_has_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result);
+
+int
+js_set_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t *value);
+
+int
+js_delete_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result);
 
 int
 js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *argc, js_value_t *argv[], js_value_t **self, void **data) {
-  if (argv != NULL) {
+  if (argv) {
     size_t i = 0, n = info->argc < *argc ? info->argc : *argc;
 
     for (; i < n; i++) {
@@ -689,15 +1016,15 @@ js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *arg
     }
   }
 
-  if (argc != NULL) {
+  if (argc) {
     *argc = info->argc;
   }
 
-  if (self != NULL) {
+  if (self) {
     *self = (js_value_t *) info->receiver;
   }
 
-  if (data != NULL) {
+  if (data) {
     *data = info->callback->data;
   }
 
@@ -714,11 +1041,11 @@ js_get_arraybuffer_info (js_env_t *env, js_value_t *arraybuffer, void **pdata, s
 
   if (env->exception) return -1;
 
-  if (pdata != NULL) {
+  if (pdata) {
     *pdata = data;
   }
 
-  if (plen != NULL) {
+  if (plen) {
     *plen = len;
   }
 
@@ -729,13 +1056,13 @@ int
 js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_type_t *ptype, void **pdata, size_t *plen, js_value_t **parraybuffer, size_t *poffset) {
   JSObjectRef arraybuffer;
 
-  if (pdata != NULL || parraybuffer != NULL) {
+  if (pdata || parraybuffer) {
     arraybuffer = JSObjectGetTypedArrayBuffer(env->context, (JSObjectRef) typedarray, &env->exception);
 
     if (env->exception) return -1;
   }
 
-  if (ptype != NULL) {
+  if (ptype) {
     JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) typedarray, &env->exception);
 
     if (env->exception) return -1;
@@ -781,7 +1108,7 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
     }
   }
 
-  if (pdata != NULL) {
+  if (pdata) {
     void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
 
     if (env->exception) return -1;
@@ -789,7 +1116,7 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
     *pdata = data;
   }
 
-  if (plen != NULL) {
+  if (plen) {
     size_t len = JSObjectGetTypedArrayLength(env->context, (JSObjectRef) typedarray, &env->exception);
 
     if (env->exception) return -1;
@@ -797,11 +1124,11 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
     *plen = len;
   }
 
-  if (parraybuffer != NULL) {
+  if (parraybuffer) {
     *parraybuffer = (js_value_t *) arraybuffer;
   }
 
-  if (poffset != NULL) {
+  if (poffset) {
     size_t offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &env->exception);
 
     if (env->exception) return -1;
@@ -813,10 +1140,106 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
 }
 
 int
+js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **data, size_t *len, js_value_t **arraybuffer, size_t *offset) {
+  return -1;
+}
+
+int
+js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
+  JSValueRef value = JSObjectCallAsFunction(env->context, (JSObjectRef) function, (JSObjectRef) receiver, argc, (const JSValueRef *) argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (result) {
+    *result = (js_value_t *) value;
+  }
+
+  return 0;
+}
+
+int
+js_make_callback (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
+  return js_call_function(env, receiver, function, argc, argv, result);
+}
+
+int
 js_throw (js_env_t *env, js_value_t *error) {
   env->exception = (JSValueRef) error;
 
   return 0;
+}
+
+int
+js_throw_error (js_env_t *env, const char *code, const char *message) {
+  JSStringRef ref = JSStringCreateWithUTF8CString(message);
+
+  JSValueRef argv[1] = {JSValueMakeString(env->context, ref)};
+
+  JSStringRelease(ref);
+
+  JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (code) {
+    ref = JSStringCreateWithUTF8CString(code);
+
+    JSValueRef value = JSValueMakeString(env->context, ref);
+
+    JSStringRelease(ref);
+
+    ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      value,
+      kJSPropertyAttributeNone,
+      &env->exception
+    );
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
+  return 0;
+}
+
+int
+js_throw_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
+  return -1;
+}
+
+int
+js_throw_type_error (js_env_t *env, const char *code, const char *message) {
+  return -1;
+}
+
+int
+js_throw_type_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
+  return -1;
+}
+
+int
+js_throw_range_error (js_env_t *env, const char *code, const char *message) {
+  return -1;
+}
+
+int
+js_throw_range_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
+  return -1;
+}
+
+int
+js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
+  return -1;
+}
+
+int
+js_throw_syntax_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
+  return -1;
 }
 
 int
@@ -838,7 +1261,33 @@ js_get_and_clear_last_exception (js_env_t *env, js_value_t **result) {
 }
 
 int
+js_fatal_exception (js_env_t *env, js_value_t *error) {
+  return -1;
+}
+
+int
+js_queue_microtask (js_env_t *env, js_task_cb cb, void *data) {
+  return -1;
+}
+
+int
+js_queue_macrotask (js_env_t *env, js_task_cb cb, void *data, uint64_t delay) {
+  return -1;
+}
+
+int
+js_adjust_external_memory (js_env_t *env, int64_t change_in_bytes, int64_t *result) {
+  return -1;
+}
+
+int
 js_request_garbage_collection (js_env_t *env) {
+  if (!env->platform->options.expose_garbage_collection) {
+    js_throw_error(env, NULL, "Garbage collection is unavailable");
+
+    return -1;
+  }
+
   JSGarbageCollect(env->context);
 
   return 0;
