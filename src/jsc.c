@@ -493,7 +493,7 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
 
 int
 js_create_array (js_env_t *env, js_value_t **result) {
-  *result = JSObjectMakeArray(env->context, 0, NULL, env->exception);
+  *result = (js_value_t *) JSObjectMakeArray(env->context, 0, NULL, &env->exception);
 
   if (env->exception) return -1;
 
@@ -504,7 +504,7 @@ int
 js_create_array_with_length (js_env_t *env, size_t len, js_value_t **result) {
   JSValueRef argv[1] = {JSValueMakeNumber(env->context, (double) len)};
 
-  *result = JSObjectMakeArray(env->context, 1, argv, env->exception);
+  *result = (js_value_t *) JSObjectMakeArray(env->context, 1, argv, &env->exception);
 
   if (env->exception) return -1;
 
@@ -760,32 +760,82 @@ js_is_date (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_error (js_env_t *env, js_value_t *value, bool *result) {
-  return -1;
+  JSStringRef ref = JSStringCreateWithUTF8CString("Error");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
 }
 
 int
 js_is_promise (js_env_t *env, js_value_t *value, bool *result) {
-  return -1;
+  JSStringRef ref = JSStringCreateWithUTF8CString("Promise");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
 }
 
 int
 js_is_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
-  return -1;
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = type == kJSTypedArrayTypeArrayBuffer;
+
+  return 0;
 }
 
 int
 js_is_detached_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
-  return -1;
+  *result = false; // JavaScriptCore does not support detachable array buffers
+
+  return 0;
 }
 
 int
 js_is_typedarray (js_env_t *env, js_value_t *value, bool *result) {
-  return -1;
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = type != kJSTypedArrayTypeNone && type != kJSTypedArrayTypeArrayBuffer;
+
+  return 0;
 }
 
 int
 js_is_dataview (js_env_t *env, js_value_t *value, bool *result) {
-  return -1;
+  JSStringRef ref = JSStringCreateWithUTF8CString("DataView");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
 }
 
 int
@@ -911,22 +961,72 @@ js_get_value_external (js_env_t *env, js_value_t *value, void **result) {
 }
 
 int
-js_get_value_date (js_env_t *env, js_value_t *value, double *result);
+js_get_value_date (js_env_t *env, js_value_t *value, double *result) {
+  *result = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
+}
 
 int
-js_get_array_length (js_env_t *env, js_value_t *value, uint32_t *result);
+js_get_array_length (js_env_t *env, js_value_t *value, uint32_t *result) {
+  JSStringRef ref = JSStringCreateWithUTF8CString("length");
+
+  JSValueRef length = JSObjectGetProperty(env->context, (JSObjectRef) value, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  *result = (uint32_t) JSValueToNumber(env->context, length, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
+}
 
 int
-js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t **result);
+js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t **result) {
+  JSValueRef value = JSObjectGetPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = (js_value_t *) value;
+
+  return 0;
+}
 
 int
-js_has_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result);
+js_has_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
+  *result = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
+}
 
 int
-js_set_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *value);
+js_set_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *value) {
+  JSObjectSetPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, (JSValueRef) value, kJSPropertyAttributeNone, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
+}
 
 int
-js_delete_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result);
+js_delete_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
+  bool value = JSObjectDeletePropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (result) {
+    *result = value;
+  }
+
+  return 0;
+}
 
 int
 js_get_named_property (js_env_t *env, js_value_t *object, const char *name, js_value_t **result) {
@@ -985,16 +1085,50 @@ js_delete_named_property (js_env_t *env, js_value_t *object, const char *name, b
 }
 
 int
-js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **result);
+js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **result) {
+  JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) object, index, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = (js_value_t *) value;
+
+  return 0;
+}
 
 int
-js_has_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result);
+js_has_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result) {
+  JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) object, index, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = !JSValueIsUndefined(env->context, value);
+
+  return 0;
+}
 
 int
-js_set_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t *value);
+js_set_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t *value) {
+  JSObjectSetPropertyAtIndex(env->context, (JSObjectRef) object, index, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
+}
 
 int
-js_delete_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result);
+js_delete_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result) {
+  JSValueRef key = JSValueMakeNumber(env->context, (double) index);
+
+  bool value = JSObjectDeletePropertyForKey(env->context, (JSObjectRef) object, key, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (result) {
+    *result = value;
+  }
+
+  return 0;
+}
 
 int
 js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *argc, js_value_t *argv[], js_value_t **self, void **data) {
