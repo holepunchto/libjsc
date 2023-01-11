@@ -416,12 +416,44 @@ js_create_double (js_env_t *env, double value, js_value_t **result) {
 
 int
 js_create_bigint_int64 (js_env_t *env, int64_t value, js_value_t **result) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
+
+  *result = (js_value_t *) JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
 }
 
 int
 js_create_bigint_uint64 (js_env_t *env, uint64_t value, js_value_t **result) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
+
+  *result = (js_value_t *) JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
 }
 
 int
