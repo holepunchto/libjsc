@@ -725,6 +725,16 @@ js_reject_deferred (js_env_t *env, js_deferred_t *deferred, js_value_t *resoluti
 }
 
 int
+js_get_promise_state (js_env_t *env, js_value_t *promise, js_promise_state_t *result) {
+  return -1;
+}
+
+int
+js_get_promise_result (js_env_t *env, js_value_t *promise, js_value_t **result) {
+  return -1;
+}
+
+int
 js_create_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
   JSObjectRef typedarray = JSObjectMakeTypedArray(env->context, kJSTypedArrayTypeUint8Array, len, &env->exception);
 
