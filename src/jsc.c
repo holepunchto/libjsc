@@ -8,6 +8,8 @@
 
 #include <JavaScriptCore/JavaScriptCore.h>
 
+#include "jsc.h"
+
 typedef struct js_callback_s js_callback_t;
 typedef struct js_finalizer_s js_finalizer_t;
 
@@ -25,6 +27,8 @@ struct js_env_s {
   int64_t external_memory;
   js_uncaught_exception_cb on_uncaught_exception;
   void *uncaught_exception_data;
+  js_unhandled_rejection_cb on_unhandled_rejection;
+  void *unhandled_rejection_data;
 
   struct {
     JSClassRef reference;
@@ -95,10 +99,24 @@ js_get_platform_loop (js_platform_t *platform, uv_loop_t **result) {
 }
 
 static void
-on_uncaught_exception (js_env_t *env, JSValueRef error) {
+on_uncaught_exception (js_env_t *env, js_value_t *error) {
   if (env->on_uncaught_exception) {
-    env->on_uncaught_exception(env, (js_value_t *) error, env->uncaught_exception_data);
+    env->on_uncaught_exception(env, error, env->uncaught_exception_data);
   }
+}
+
+static js_value_t *
+on_unhandled_rejection (js_env_t *env, js_callback_info_t *info) {
+  if (env->on_unhandled_rejection) {
+    size_t argc = 2;
+    js_value_t *argv[2];
+
+    js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+
+    env->on_unhandled_rejection(env, argv[0], env->unhandled_rejection_data);
+  }
+
+  return NULL;
 }
 
 static void
@@ -128,6 +146,8 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
 
   env->on_uncaught_exception = NULL;
   env->uncaught_exception_data = NULL;
+  env->on_unhandled_rejection = NULL;
+  env->unhandled_rejection_data = NULL;
 
   env->classes.reference = JSClassCreate(&(JSClassDefinition){
     .finalize = on_reference_finalize,
@@ -144,6 +164,11 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
   env->classes.external = JSClassCreate(&(JSClassDefinition){
     .finalize = on_external_finalize,
   });
+
+  js_value_t *fn;
+  js_create_function(env, "onunhandledrejection", -1, on_unhandled_rejection, NULL, &fn);
+
+  JSGlobalContextSetUnhandledRejectionCallback(context, (JSObjectRef) fn, NULL);
 
   *result = env;
 
@@ -174,7 +199,10 @@ js_on_uncaught_exception (js_env_t *env, js_uncaught_exception_cb cb, void *data
 
 int
 js_on_unhandled_rejection (js_env_t *env, js_unhandled_rejection_cb cb, void *data) {
-  return -1;
+  env->on_unhandled_rejection = cb;
+  env->unhandled_rejection_data = data;
+
+  return 0;
 }
 
 int
@@ -233,7 +261,7 @@ js_run_script (js_env_t *env, js_value_t *source, js_value_t **result) {
 
       env->exception = NULL;
 
-      on_uncaught_exception(env, error);
+      on_uncaught_exception(env, (js_value_t *) error);
 
       env->exception = error;
     }
@@ -1539,7 +1567,7 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
 
       env->exception = NULL;
 
-      on_uncaught_exception(env, error);
+      on_uncaught_exception(env, (js_value_t *) error);
 
       env->exception = error;
     }
@@ -1654,7 +1682,7 @@ js_get_and_clear_last_exception (js_env_t *env, js_value_t **result) {
 
 int
 js_fatal_exception (js_env_t *env, js_value_t *error) {
-  on_uncaught_exception(env, (JSValueRef) error);
+  on_uncaught_exception(env, error);
 
   return 0;
 }

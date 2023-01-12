@@ -19,6 +19,8 @@ list(APPEND tests
   get-arraybuffer-info
   get-typedarray-info-uint8array
   get-typedarray-info-uint16array
+  promise-rejection
+  promise-rejection-unhandled
   run-script
   run-script-ignore-return
   run-script-throw
