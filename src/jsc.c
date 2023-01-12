@@ -21,7 +21,10 @@ struct js_env_s {
   js_platform_t *platform;
   JSGlobalContextRef context;
   JSValueRef exception;
+  uint32_t depth;
   int64_t external_memory;
+  js_uncaught_exception_cb on_uncaught_exception;
+  void *uncaught_exception_data;
 
   struct {
     JSClassRef reference;
@@ -92,6 +95,13 @@ js_get_platform_loop (js_platform_t *platform, uv_loop_t **result) {
 }
 
 static void
+on_uncaught_exception (js_env_t *env, JSValueRef error) {
+  if (env->on_uncaught_exception) {
+    env->on_uncaught_exception(env, (js_value_t *) error, env->uncaught_exception_data);
+  }
+}
+
+static void
 on_reference_finalize (JSObjectRef external);
 
 static void
@@ -113,7 +123,11 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
   env->platform = platform;
   env->context = context;
   env->exception = NULL;
+  env->depth = 0;
   env->external_memory = 0;
+
+  env->on_uncaught_exception = NULL;
+  env->uncaught_exception_data = NULL;
 
   env->classes.reference = JSClassCreate(&(JSClassDefinition){
     .finalize = on_reference_finalize,
@@ -152,7 +166,10 @@ js_destroy_env (js_env_t *env) {
 
 int
 js_on_uncaught_exception (js_env_t *env, js_uncaught_exception_cb cb, void *data) {
-  return -1;
+  env->on_uncaught_exception = cb;
+  env->uncaught_exception_data = data;
+
+  return 0;
 }
 
 int
@@ -202,11 +219,27 @@ js_run_script (js_env_t *env, js_value_t *source, js_value_t **result) {
 
   if (env->exception) return -1;
 
+  env->depth++;
+
   JSValueRef value = JSEvaluateScript(env->context, ref, NULL, NULL, 1, &env->exception);
+
+  env->depth--;
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) {
+    if (env->depth == 0) {
+      JSValueRef error = env->exception;
+
+      env->exception = NULL;
+
+      on_uncaught_exception(env, error);
+
+      env->exception = error;
+    }
+
+    return -1;
+  }
 
   if (result) {
     *result = (js_value_t *) value;
@@ -652,7 +685,23 @@ js_create_external (js_env_t *env, void *data, js_finalize_cb finalize_cb, void 
 
 int
 js_create_date (js_env_t *env, double time, js_value_t **result) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("Date");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) time)};
+
+  *result = (js_value_t *) JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
 }
 
 int
@@ -1478,9 +1527,25 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **data, size_t *
 
 int
 js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
+  env->depth++;
+
   JSValueRef value = JSObjectCallAsFunction(env->context, (JSObjectRef) function, (JSObjectRef) receiver, argc, (const JSValueRef *) argv, &env->exception);
 
-  if (env->exception) return -1;
+  env->depth--;
+
+  if (env->exception) {
+    if (env->depth == 0) {
+      JSValueRef error = env->exception;
+
+      env->exception = NULL;
+
+      on_uncaught_exception(env, error);
+
+      env->exception = error;
+    }
+
+    return -1;
+  }
 
   if (result) {
     *result = (js_value_t *) value;
@@ -1589,17 +1654,9 @@ js_get_and_clear_last_exception (js_env_t *env, js_value_t **result) {
 
 int
 js_fatal_exception (js_env_t *env, js_value_t *error) {
-  return -1;
-}
+  on_uncaught_exception(env, (JSValueRef) error);
 
-int
-js_queue_microtask (js_env_t *env, js_task_cb cb, void *data) {
-  return -1;
-}
-
-int
-js_queue_macrotask (js_env_t *env, js_task_cb cb, void *data, uint64_t delay) {
-  return -1;
+  return 0;
 }
 
 int

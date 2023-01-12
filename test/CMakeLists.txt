@@ -15,6 +15,7 @@ list(APPEND tests
   create-function-throw
   create-function-throw-indirect
   create-reference
+  fatal-exception
   get-arraybuffer-info
   get-typedarray-info-uint8array
   get-typedarray-info-uint16array
