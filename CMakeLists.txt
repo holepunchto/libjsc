@@ -25,6 +25,17 @@ target_sources(
   jsc
   PRIVATE
     src/jsc.c
+    src/jsc.h
+    src/jsc/JSBasePrivate.h
+    src/jsc/JSContextRefPrivate.h
+    src/jsc/JSHeapFinalizerPrivate.h
+    src/jsc/JSLockRefPrivate.h
+    src/jsc/JSMarkingConstraintPrivate.h
+    src/jsc/JSObjectRefPrivate.h
+    src/jsc/JSScriptRefPrivate.h
+    src/jsc/JSStringRefPrivate.h
+    src/jsc/JSWeakObjectMapRefPrivate.h
+    src/jsc/JSWeakPrivate.h
 )
 
 target_include_directories(
