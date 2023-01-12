@@ -1472,11 +1472,6 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
 }
 
 int
-js_make_callback (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
-  return js_call_function(env, receiver, function, argc, argv, result);
-}
-
-int
 js_throw (js_env_t *env, js_value_t *error) {
   env->exception = (JSValueRef) error;
 

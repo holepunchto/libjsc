@@ -10,8 +10,6 @@ Being built on JavaScriptCore, the library has some differences from its V8 coun
 
 - **No module support:** The builtin JavaScriptCore framework on Darwin does not expose an API for module loading and so the `js_module_t` API is therefore not available.
 
-- **Implicit microtask execution:** JavaScriptCore does not expose an API for controlling microtask execution and instead always performs a microtask checkpoint before returning to native code. `js_call_function()` therefore behaves as `js_make_callback()` when no JavaScript is on the stack.
-
 ## License
 
 ISC
