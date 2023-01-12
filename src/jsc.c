@@ -22,6 +22,13 @@ struct js_env_s {
   JSGlobalContextRef context;
   JSValueRef exception;
   int64_t external_memory;
+
+  struct {
+    JSClassRef reference;
+    JSClassRef wrap;
+    JSClassRef external;
+    JSClassRef function;
+  } classes;
 };
 
 struct js_ref_s {
@@ -84,6 +91,18 @@ js_get_platform_loop (js_platform_t *platform, uv_loop_t **result) {
   return 0;
 }
 
+static void
+on_reference_finalize (JSObjectRef external);
+
+static void
+on_wrap_finalize (JSObjectRef external);
+
+static void
+on_function_finalize (JSObjectRef external);
+
+static void
+on_external_finalize (JSObjectRef external);
+
 int
 js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
   JSGlobalContextRef context = JSGlobalContextCreate(NULL);
@@ -96,6 +115,22 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
   env->exception = NULL;
   env->external_memory = 0;
 
+  env->classes.reference = JSClassCreate(&(JSClassDefinition){
+    .finalize = on_reference_finalize,
+  });
+
+  env->classes.wrap = JSClassCreate(&(JSClassDefinition){
+    .finalize = on_wrap_finalize,
+  });
+
+  env->classes.function = JSClassCreate(&(JSClassDefinition){
+    .finalize = on_function_finalize,
+  });
+
+  env->classes.external = JSClassCreate(&(JSClassDefinition){
+    .finalize = on_external_finalize,
+  });
+
   *result = env;
 
   return 0;
@@ -103,6 +138,11 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
 
 int
 js_destroy_env (js_env_t *env) {
+  JSClassRelease(env->classes.reference);
+  JSClassRelease(env->classes.wrap);
+  JSClassRelease(env->classes.function);
+  JSClassRelease(env->classes.external);
+
   JSGlobalContextRelease(env->context);
 
   free(env);
@@ -207,10 +247,6 @@ on_reference_finalize (JSObjectRef external) {
   if (reference) reference->value = NULL;
 }
 
-static JSClassDefinition js_reference_finalizer = {
-  .finalize = on_reference_finalize,
-};
-
 int
 js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t **result) {
   js_ref_t *reference = malloc(sizeof(js_ref_t));
@@ -220,26 +256,20 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
 
   if (reference->count > 0) JSValueProtect(env->context, reference->value);
 
-  {
-    JSClassRef class = JSClassCreate(&js_reference_finalizer);
+  JSObjectRef external = JSObjectMake(env->context, env->classes.reference, (void *) reference);
 
-    JSObjectRef external = JSObjectMake(env->context, class, (void *) reference);
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
 
-    JSClassRelease(class);
+  JSObjectSetProperty(
+    env->context,
+    (JSObjectRef) value,
+    ref,
+    external,
+    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+    NULL
+  );
 
-    JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
-
-    JSObjectSetProperty(
-      env->context,
-      (JSObjectRef) value,
-      ref,
-      external,
-      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
-      NULL
-    );
-
-    JSStringRelease(ref);
-  }
+  JSStringRelease(ref);
 
   *result = reference;
 
@@ -313,10 +343,6 @@ on_wrap_finalize (JSObjectRef external) {
   free(finalizer);
 }
 
-static JSClassDefinition js_wrap_finalizer = {
-  .finalize = on_wrap_finalize,
-};
-
 int
 js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
   js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
@@ -326,11 +352,7 @@ js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_
   finalizer->cb = finalize_cb;
   finalizer->hint = finalize_hint;
 
-  JSClassRef class = JSClassCreate(&js_wrap_finalizer);
-
-  JSObjectRef external = JSObjectMake(env->context, class, (void *) finalizer);
-
-  JSClassRelease(class);
+  JSObjectRef external = JSObjectMake(env->context, env->classes.wrap, (void *) finalizer);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
@@ -537,10 +559,6 @@ on_function_call (JSContextRef context, JSObjectRef function, JSObjectRef receiv
   return NULL;
 }
 
-static JSClassDefinition js_function_finalizer = {
-  .finalize = on_function_finalize,
-};
-
 int
 js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb cb, void *data, js_value_t **result) {
   JSStringRef ref;
@@ -565,26 +583,20 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
   callback->cb = cb;
   callback->data = data;
 
-  {
-    JSClassRef class = JSClassCreate(&js_function_finalizer);
+  JSObjectRef external = JSObjectMake(env->context, env->classes.function, (void *) callback);
 
-    JSObjectRef external = JSObjectMake(env->context, class, (void *) callback);
+  ref = JSStringCreateWithUTF8CString("__native_function");
 
-    JSClassRelease(class);
+  JSObjectSetProperty(
+    env->context,
+    function,
+    ref,
+    external,
+    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+    NULL
+  );
 
-    JSStringRef ref = JSStringCreateWithUTF8CString("__native_function");
-
-    JSObjectSetProperty(
-      env->context,
-      function,
-      ref,
-      external,
-      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
-      NULL
-    );
-
-    JSStringRelease(ref);
-  }
+  JSStringRelease(ref);
 
   *result = (js_value_t *) function;
 
@@ -622,10 +634,6 @@ on_external_finalize (JSObjectRef external) {
   free(finalizer);
 }
 
-static JSClassDefinition js_external_finalizer = {
-  .finalize = on_external_finalize,
-};
-
 int
 js_create_external (js_env_t *env, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
   js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
@@ -635,11 +643,7 @@ js_create_external (js_env_t *env, void *data, js_finalize_cb finalize_cb, void 
   finalizer->cb = finalize_cb;
   finalizer->hint = finalize_hint;
 
-  JSClassRef class = JSClassCreate(&js_external_finalizer);
-
-  JSObjectRef external = JSObjectMake(env->context, class, (void *) finalizer);
-
-  JSClassRelease(class);
+  JSObjectRef external = JSObjectMake(env->context, env->classes.external, (void *) finalizer);
 
   *result = (js_value_t *) external;
 
@@ -886,6 +890,8 @@ js_typeof (js_env_t *env, js_value_t *value, js_value_type_t *result) {
   case kJSTypeObject:
     *result = JSObjectIsFunction(env->context, (JSObjectRef) value)
                 ? js_function
+              : JSValueIsObjectOfClass(env->context, (JSValueRef) value, env->classes.external)
+                ? js_external
                 : js_object;
     break;
   case kJSTypeSymbol:
@@ -961,6 +967,8 @@ js_is_array (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_external (js_env_t *env, js_value_t *value, bool *result) {
+  *result = JSValueIsObjectOfClass(env->context, (JSValueRef) value, env->classes.external);
+
   return -1;
 }
 
