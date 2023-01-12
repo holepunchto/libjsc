@@ -1056,7 +1056,7 @@ int
 js_is_external (js_env_t *env, js_value_t *value, bool *result) {
   *result = JSValueIsObjectOfClass(env->context, (JSValueRef) value, env->classes.external);
 
-  return -1;
+  return 0;
 }
 
 int
