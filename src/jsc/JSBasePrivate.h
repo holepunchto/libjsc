@@ -47,6 +47,12 @@ JS_EXPORT void
 JSReportExtraMemoryCost (JSContextRef ctx, size_t size) API_AVAILABLE(macos(10.6), ios(7.0));
 
 JS_EXPORT void
+JSSynchronousGarbageCollectForDebugging (JSContextRef ctx);
+
+JS_EXPORT void
+JSSynchronousEdenCollectForDebugging (JSContextRef ctx);
+
+JS_EXPORT void
 JSDisableGCTimer (void);
 
 #if !defined(__APPLE__) && !defined(WIN32) && !defined(_WIN32)

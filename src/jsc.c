@@ -22,9 +22,9 @@ struct js_platform_s {
 struct js_env_s {
   uv_loop_t *loop;
   js_platform_t *platform;
+  uint32_t depth;
   JSGlobalContextRef context;
   JSValueRef exception;
-  uint32_t depth;
   int64_t external_memory;
   js_uncaught_exception_cb on_uncaught_exception;
   void *uncaught_exception_data;
@@ -149,9 +149,9 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
 
   env->loop = loop;
   env->platform = platform;
+  env->depth = 0;
   env->context = context;
   env->exception = NULL;
-  env->depth = 0;
   env->external_memory = 0;
 
   env->on_uncaught_exception = NULL;
@@ -193,6 +193,7 @@ int
 js_destroy_env (js_env_t *env) {
   JSClassRelease(env->classes.reference);
   JSClassRelease(env->classes.wrap);
+  JSClassRelease(env->classes.finalizer);
   JSClassRelease(env->classes.function);
   JSClassRelease(env->classes.external);
 
@@ -1781,7 +1782,7 @@ js_request_garbage_collection (js_env_t *env) {
     return -1;
   }
 
-  JSGarbageCollect(env->context);
+  JSSynchronousEdenCollectForDebugging(env->context);
 
   return 0;
 }
