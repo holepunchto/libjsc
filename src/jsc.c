@@ -816,6 +816,23 @@ js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_
 
   if (env->exception) return -1;
 
+  if (code) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      (JSValueRef) code,
+      kJSPropertyAttributeNone,
+      &env->exception
+    );
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
   *result = (js_value_t *) error;
 
   return 0;
@@ -823,17 +840,122 @@ js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_
 
 int
 js_create_type_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("TypeError");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  JSValueRef argv[1] = {(JSValueRef) message};
+
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (code) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      (JSValueRef) code,
+      kJSPropertyAttributeNone,
+      &env->exception
+    );
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
+  *result = (js_value_t *) error;
+
+  return 0;
 }
 
 int
 js_create_range_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("RangeError");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  JSValueRef argv[1] = {(JSValueRef) message};
+
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (code) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      (JSValueRef) code,
+      kJSPropertyAttributeNone,
+      &env->exception
+    );
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
+  *result = (js_value_t *) error;
+
+  return 0;
 }
 
 int
 js_create_syntax_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("SyntaxError");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  JSValueRef argv[1] = {(JSValueRef) message};
+
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (code) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      (JSValueRef) code,
+      kJSPropertyAttributeNone,
+      &env->exception
+    );
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
+  *result = (js_value_t *) error;
+
+  return 0;
 }
 
 int
