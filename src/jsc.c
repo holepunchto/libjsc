@@ -293,26 +293,36 @@ js_run_script (js_env_t *env, js_value_t *source, js_value_t **result) {
 
 int
 js_create_module (js_env_t *env, const char *name, size_t len, js_value_t *source, js_module_cb cb, void *data, js_module_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
 int
 js_create_synthetic_module (js_env_t *env, const char *name, size_t len, js_value_t *const export_names[], size_t names_len, js_synthetic_module_cb cb, void *data, js_module_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
 int
 js_delete_module (js_env_t *env, js_module_t *module) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
 int
 js_set_module_export (js_env_t *env, js_module_t *module, js_value_t *name, js_value_t *value) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
 int
 js_run_module (js_env_t *env, js_module_t *module, js_value_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
@@ -999,13 +1009,19 @@ js_reject_deferred (js_env_t *env, js_deferred_t *deferred, js_value_t *resoluti
   return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=250554
 int
 js_get_promise_state (js_env_t *env, js_value_t *promise, js_promise_state_t *result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=250554
 int
 js_get_promise_result (js_env_t *env, js_value_t *promise, js_value_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
@@ -1063,8 +1079,11 @@ js_create_external_arraybuffer (js_env_t *env, void *data, size_t len, js_finali
   return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=250552
 int
 js_detach_arraybuffer (js_env_t *env, js_value_t *arraybuffer) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
@@ -1149,9 +1168,26 @@ js_create_typedarray (js_env_t *env, js_typedarray_type_t type, size_t len, js_v
 
 int
 js_create_dataview (js_env_t *env, size_t len, js_value_t *arraybuffer, size_t offset, js_value_t **result) {
-  return -1;
+  JSStringRef ref = JSStringCreateWithUTF8CString("DataView");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  JSValueRef argv[3] = {(JSValueRef) arraybuffer, JSValueMakeNumber(env->context, offset), JSValueMakeNumber(env->context, len)};
+
+  JSObjectRef dataview = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 3, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  *result = (js_value_t *) dataview;
+
+  return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_typeof (js_env_t *env, js_value_t *value, js_value_type_t *result) {
   JSType type = JSValueGetType(env->context, (JSValueRef) value);
@@ -1257,8 +1293,11 @@ js_is_external (js_env_t *env, js_value_t *value, bool *result) {
   return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_is_bigint (js_env_t *env, js_value_t *value, bool *result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
@@ -1314,9 +1353,10 @@ js_is_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
   return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=250552
 int
 js_is_detached_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
-  *result = false; // JavaScriptCore does not support detachable array buffers
+  *result = false;
 
   return 0;
 }
@@ -1435,13 +1475,19 @@ js_get_value_double (js_env_t *env, js_value_t *value, double *result) {
   return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_get_value_bigint_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_get_value_bigint_uint64 (js_env_t *env, js_value_t *value, uint64_t *result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
   return -1;
 }
 
@@ -1747,8 +1793,64 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
 }
 
 int
-js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **data, size_t *len, js_value_t **arraybuffer, size_t *offset) {
-  return -1;
+js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t *plen, js_value_t **parraybuffer, size_t *poffset) {
+  JSObjectRef arraybuffer;
+
+  if (pdata || parraybuffer) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("buffer");
+
+    arraybuffer = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &env->exception);
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
+  if (pdata) {
+    void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
+
+    if (env->exception) return -1;
+
+    *pdata = data;
+  }
+
+  if (plen) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("byteLength");
+
+    JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &env->exception);
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+
+    double len = JSValueToNumber(env->context, value, &env->exception);
+
+    if (env->exception) return -1;
+
+    *plen = (size_t) len;
+  }
+
+  if (parraybuffer) {
+    *parraybuffer = (js_value_t *) arraybuffer;
+  }
+
+  if (poffset) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("byteOffset");
+
+    JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &env->exception);
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+
+    double offset = JSValueToNumber(env->context, value, &env->exception);
+
+    if (env->exception) return -1;
+
+    *poffset = (size_t) offset;
+  }
+
+  return 0;
 }
 
 int
