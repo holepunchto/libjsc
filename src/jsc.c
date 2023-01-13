@@ -1788,6 +1788,19 @@ js_throw (js_env_t *env, js_value_t *error) {
 }
 
 int
+js_vformat (char **result, size_t *size, const char *message, va_list args) {
+  int res = vsnprintf(NULL, 0, message, args);
+  if (res < 0) return res;
+
+  *size = res + 1 /* NULL */;
+  *result = malloc(*size);
+
+  vsnprintf(*result, *size, message, args);
+
+  return 0;
+}
+
+int
 js_throw_error (js_env_t *env, const char *code, const char *message) {
   JSStringRef ref = JSStringCreateWithUTF8CString(message);
 
@@ -1827,37 +1840,198 @@ js_throw_error (js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
-  return -1;
+  size_t len;
+  char *formatted;
+  js_vformat(&formatted, &len, message, args);
+
+  int err = js_throw_error(env, code, formatted);
+
+  free(formatted);
+
+  return err;
 }
 
 int
 js_throw_type_error (js_env_t *env, const char *code, const char *message) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("TypeError");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  ref = JSStringCreateWithUTF8CString(message);
+
+  JSValueRef argv[1] = {JSValueMakeString(env->context, ref)};
+
+  JSStringRelease(ref);
+
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (code) {
+    ref = JSStringCreateWithUTF8CString(code);
+
+    JSValueRef value = JSValueMakeString(env->context, ref);
+
+    JSStringRelease(ref);
+
+    ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      value,
+      kJSPropertyAttributeNone,
+      &env->exception
+    );
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
+  return 0;
 }
 
 int
 js_throw_type_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
-  return -1;
+  size_t len;
+  char *formatted;
+  js_vformat(&formatted, &len, message, args);
+
+  int err = js_throw_type_error(env, code, formatted);
+
+  free(formatted);
+
+  return err;
 }
 
 int
 js_throw_range_error (js_env_t *env, const char *code, const char *message) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("RangeError");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  ref = JSStringCreateWithUTF8CString(message);
+
+  JSValueRef argv[1] = {JSValueMakeString(env->context, ref)};
+
+  JSStringRelease(ref);
+
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (code) {
+    ref = JSStringCreateWithUTF8CString(code);
+
+    JSValueRef value = JSValueMakeString(env->context, ref);
+
+    JSStringRelease(ref);
+
+    ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      value,
+      kJSPropertyAttributeNone,
+      &env->exception
+    );
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
+  return 0;
 }
 
 int
 js_throw_range_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
-  return -1;
+  size_t len;
+  char *formatted;
+  js_vformat(&formatted, &len, message, args);
+
+  int err = js_throw_range_error(env, code, formatted);
+
+  free(formatted);
+
+  return err;
 }
 
 int
 js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
-  return -1;
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("SyntaxError");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  ref = JSStringCreateWithUTF8CString(message);
+
+  JSValueRef argv[1] = {JSValueMakeString(env->context, ref)};
+
+  JSStringRelease(ref);
+
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+
+  if (env->exception) return -1;
+
+  if (code) {
+    ref = JSStringCreateWithUTF8CString(code);
+
+    JSValueRef value = JSValueMakeString(env->context, ref);
+
+    JSStringRelease(ref);
+
+    ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      value,
+      kJSPropertyAttributeNone,
+      &env->exception
+    );
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+  }
+
+  return 0;
 }
 
 int
 js_throw_syntax_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
-  return -1;
+  size_t len;
+  char *formatted;
+  js_vformat(&formatted, &len, message, args);
+
+  int err = js_throw_range_error(env, code, formatted);
+
+  free(formatted);
+
+  return err;
 }
 
 int
