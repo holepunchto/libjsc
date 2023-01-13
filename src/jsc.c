@@ -12,6 +12,7 @@
 
 typedef struct js_callback_s js_callback_t;
 typedef struct js_finalizer_s js_finalizer_t;
+typedef struct js_finalizer_list_s js_finalizer_list_t;
 
 struct js_platform_s {
   js_platform_options_t options;
@@ -33,6 +34,7 @@ struct js_env_s {
   struct {
     JSClassRef reference;
     JSClassRef wrap;
+    JSClassRef finalizer;
     JSClassRef external;
     JSClassRef function;
   } classes;
@@ -53,6 +55,11 @@ struct js_finalizer_s {
   void *data;
   js_finalize_cb cb;
   void *hint;
+};
+
+struct js_finalizer_list_s {
+  js_finalizer_t finalizer;
+  js_finalizer_list_t *next;
 };
 
 struct js_callback_s {
@@ -126,6 +133,9 @@ static void
 on_wrap_finalize (JSObjectRef external);
 
 static void
+on_finalizer_finalize (JSObjectRef external);
+
+static void
 on_function_finalize (JSObjectRef external);
 
 static void
@@ -155,6 +165,10 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
 
   env->classes.wrap = JSClassCreate(&(JSClassDefinition){
     .finalize = on_wrap_finalize,
+  });
+
+  env->classes.finalizer = JSClassCreate(&(JSClassDefinition){
+    .finalize = on_finalizer_finalize,
   });
 
   env->classes.function = JSClassCreate(&(JSClassDefinition){
@@ -465,6 +479,67 @@ js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
   JSObjectDeleteProperty(env->context, (JSObjectRef) object, ref, NULL);
 
   JSStringRelease(ref);
+
+  return 0;
+}
+
+static void
+on_finalizer_finalize (JSObjectRef external) {
+  js_finalizer_list_t *next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
+
+  js_finalizer_list_t *prev = NULL;
+
+  while (next) {
+    js_finalizer_t *finalizer = &next->finalizer;
+
+    if (finalizer->cb) {
+      finalizer->cb(finalizer->env, finalizer->data, finalizer->hint);
+    }
+
+    prev = next;
+    next = next->next;
+
+    free(prev);
+  }
+}
+
+int
+js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
+  js_finalizer_list_t *prev = malloc(sizeof(js_finalizer_list_t));
+
+  js_finalizer_t *finalizer = &prev->finalizer;
+
+  finalizer->env = env;
+  finalizer->data = data;
+  finalizer->cb = finalize_cb;
+  finalizer->hint = finalize_hint;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_finalizer");
+
+  JSObjectRef external;
+
+  if (JSObjectHasProperty(env->context, (JSObjectRef) object, ref)) {
+    external = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+  } else {
+    external = JSObjectMake(env->context, env->classes.finalizer, NULL);
+
+    JSObjectSetProperty(
+      env->context,
+      (JSObjectRef) object,
+      ref,
+      external,
+      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+      NULL
+    );
+  }
+
+  JSStringRelease(ref);
+
+  prev->next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
+
+  JSObjectSetPrivate(external, (void *) prev);
+
+  if (result) js_create_reference(env, object, 0, result);
 
   return 0;
 }
