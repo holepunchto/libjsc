@@ -1889,6 +1889,10 @@ int
 js_adjust_external_memory (js_env_t *env, int64_t change_in_bytes, int64_t *result) {
   env->external_memory += change_in_bytes;
 
+  if (change_in_bytes > 0) {
+    JSReportExtraMemoryCost(env->context, change_in_bytes);
+  }
+
   if (result) {
     *result = env->external_memory;
   }
