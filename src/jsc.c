@@ -1497,10 +1497,16 @@ js_get_value_string_utf8 (js_env_t *env, js_value_t *value, char *str, size_t le
 
   if (env->exception) return -1;
 
-  len = JSStringGetUTF8CString(ref, str, len);
+  if (str == NULL) {
+    *result = JSStringGetMaximumUTF8CStringSize(ref) - 1 /* NULL */;
+  } else if (len != 0) {
+    len = JSStringGetUTF8CString(ref, str, len) - 1 /* NULL */;
 
-  if (result) {
-    *result = len;
+    if (result) {
+      *result = len;
+    }
+  } else if (result) {
+    *result = 0;
   }
 
   JSStringRelease(ref);
