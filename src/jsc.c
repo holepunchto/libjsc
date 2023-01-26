@@ -1093,6 +1093,11 @@ js_detach_arraybuffer (js_env_t *env, js_value_t *arraybuffer) {
   return -1;
 }
 
+int
+js_set_arraybuffer_zero_fill_enabled (bool enabled) {
+  return 0;
+}
+
 static inline JSTypedArrayType
 js_convert_from_typedarray_type (js_typedarray_type_t type) {
   switch (type) {
