@@ -24,6 +24,8 @@ list(APPEND tests
   get-value-string-utf8
   get-value-string-utf8-length
   get-value-string-utf8-no-null
+  many-large-allocs
+  many-small-allocs
   promise-rejection
   promise-rejection-unhandled
   run-script
