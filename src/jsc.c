@@ -24,6 +24,7 @@ struct js_env_s {
   uv_loop_t *loop;
   js_platform_t *platform;
   uint32_t depth;
+  JSContextGroupRef group;
   JSGlobalContextRef context;
   JSValueRef exception;
   int64_t external_memory;
@@ -144,13 +145,16 @@ on_external_finalize (JSObjectRef external);
 
 int
 js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
-  JSGlobalContextRef context = JSGlobalContextCreate(NULL);
+  JSContextGroupRef group = JSContextGroupCreate();
+
+  JSGlobalContextRef context = JSGlobalContextCreateInGroup(group, NULL);
 
   js_env_t *env = malloc(sizeof(js_env_t));
 
   env->loop = loop;
   env->platform = platform;
   env->depth = 0;
+  env->group = group;
   env->context = context;
   env->exception = NULL;
   env->external_memory = 0;
@@ -199,6 +203,7 @@ js_destroy_env (js_env_t *env) {
   JSClassRelease(env->classes.external);
 
   JSGlobalContextRelease(env->context);
+  JSContextGroupRelease(env->group);
 
   free(env);
 
