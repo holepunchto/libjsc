@@ -61,7 +61,7 @@ foreach(test IN LISTS tests)
   target_include_directories(
     ${test}
     PRIVATE
-      $<TARGET_PROPERTY:jsc,INCLUDE_DIRECTORIES>
+      $<TARGET_PROPERTY:jsc,INTERFACE_INCLUDE_DIRECTORIES>
   )
 
   add_test(
