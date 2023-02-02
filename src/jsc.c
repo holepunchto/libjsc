@@ -122,7 +122,7 @@ on_unhandled_rejection (js_env_t *env, js_callback_info_t *info) {
 
     js_get_callback_info(env, info, &argc, argv, NULL, NULL);
 
-    env->on_unhandled_rejection(env, argv[0], env->unhandled_rejection_data);
+    env->on_unhandled_rejection(env, argv[1], argv[0], env->unhandled_rejection_data);
   }
 
   return NULL;
