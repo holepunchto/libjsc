@@ -18,7 +18,7 @@ set_target_properties(
   jsc
   PROPERTIES
   C_STANDARD 99
-  POSITION_INDEPENDENT_CODE 1
+  POSITION_INDEPENDENT_CODE ON
 )
 
 target_sources(
@@ -42,7 +42,7 @@ target_include_directories(
   jsc
   PUBLIC
     include
-    $<TARGET_PROPERTY:js,INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 add_library(jsc_shared SHARED $<TARGET_OBJECTS:jsc>)
