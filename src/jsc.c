@@ -263,18 +263,23 @@ js_escape_handle (js_env_t *env, js_escapable_handle_scope_t *scope, js_value_t 
 }
 
 int
-js_run_script (js_env_t *env, js_value_t *source, js_value_t **result) {
+js_run_script (js_env_t *env, const char *file, size_t len, js_value_t *source, js_value_t **result) {
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) source, &env->exception);
 
   if (env->exception) return -1;
 
   env->depth++;
 
-  JSValueRef value = JSEvaluateScript(env->context, ref, NULL, NULL, 1, &env->exception);
+  if (file == NULL) file = "";
+
+  JSStringRef url = JSStringCreateWithUTF8CString(file);
+
+  JSValueRef value = JSEvaluateScript(env->context, ref, NULL, url, 1, &env->exception);
 
   env->depth--;
 
   JSStringRelease(ref);
+  JSStringRelease(url);
 
   if (env->exception) {
     if (env->depth == 0) {
