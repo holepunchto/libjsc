@@ -1063,7 +1063,33 @@ js_create_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **resu
 }
 
 static void
-on_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
+on_unsafe_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
+  free(bytes);
+}
+
+int
+js_create_unsafe_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
+  void *bytes = malloc(len);
+
+  JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, bytes, len, on_unsafe_arraybuffer_finalize, NULL, &env->exception);
+
+  if (env->exception) {
+    free(bytes);
+
+    return -1;
+  }
+
+  *result = (js_value_t *) arraybuffer;
+
+  if (data) {
+    *data = bytes;
+  }
+
+  return 0;
+}
+
+static void
+on_external_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
   js_finalizer_t *finalizer = (js_finalizer_t *) deallocatorContext;
 
   if (finalizer->cb) {
@@ -1082,7 +1108,7 @@ js_create_external_arraybuffer (js_env_t *env, void *data, size_t len, js_finali
   finalizer->cb = finalize_cb;
   finalizer->hint = finalize_hint;
 
-  JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, data, len, on_arraybuffer_finalize, (void *) finalizer, &env->exception);
+  JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, data, len, on_external_arraybuffer_finalize, (void *) finalizer, &env->exception);
 
   if (env->exception) {
     free(finalizer);
@@ -2210,6 +2236,8 @@ js_request_garbage_collection (js_env_t *env) {
 
     return -1;
   }
+
+  JSSynchronousEdenCollectForDebugging(env->context);
 
   JSSynchronousGarbageCollectForDebugging(env->context);
 
