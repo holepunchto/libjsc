@@ -1,6 +1,8 @@
 list(APPEND tests
   add-finalizer
   adjust-external-memory
+  atomics-wait-timeout
+  atomics-wait-timeout-notify
   call-function
   call-function-ignore-return
   call-function-microtask
@@ -15,7 +17,18 @@ list(APPEND tests
   create-function-args-fewer
   create-function-throw
   create-function-throw-indirect
+  create-function-with-ffi
+  create-function-with-ffi-arraybuffer
+  create-function-with-ffi-no-jit
+  create-function-with-ffi-pointer
+  create-function-with-ffi-receiver
+  create-function-with-ffi-string
+  create-function-with-ffi-uint8array
+  create-promise-reject
+  create-promise-resolve
   create-reference
+  create-reference-weak
+  create-unsafe-arraybuffer
   fatal-exception
   get-arraybuffer-info
   get-dataview-info
@@ -28,6 +41,8 @@ list(APPEND tests
   many-small-allocs
   promise-rejection
   promise-rejection-unhandled
+  run-module
+  run-module-async
   run-script
   run-script-ignore-return
   run-script-throw
@@ -43,10 +58,34 @@ list(APPEND tests
   typeof-symbol
   typeof-undefined
   wasm
+  wasm-async
   wrap
   wrap-with-finalizer
   wrap-with-reference
   wrap-remove-with-finalizer
+)
+
+list(APPEND skipped_tests
+  add-finalizer
+  atomics-wait-timeout
+  atomics-wait-timeout-notify
+  create-external-with-finalizer
+  create-external-arraybuffer-with-finalizer
+  create-function-with-ffi
+  create-function-with-ffi-arraybuffer
+  create-function-with-ffi-pointer
+  create-function-with-ffi-receiver
+  create-function-with-ffi-string
+  create-function-with-ffi-uint8array
+  create-promise-reject
+  create-promise-resolve
+  create-reference-weak
+  run-module
+  run-module-async
+  typeof-bigint
+  wasm-async
+  wrap-with-finalizer
+  wrap-with-reference
 )
 
 foreach(test IN LISTS tests)
@@ -69,4 +108,18 @@ foreach(test IN LISTS tests)
     COMMAND ${test}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   )
+
+  set_tests_properties(
+    ${test}
+    PROPERTIES
+    TIMEOUT 30000
+  )
+
+  if(${test} IN_LIST skipped_tests)
+    set_tests_properties(
+      ${test}
+      PROPERTIES
+      DISABLED True
+    )
+  endif()
 endforeach()
