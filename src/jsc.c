@@ -263,7 +263,7 @@ js_escape_handle (js_env_t *env, js_escapable_handle_scope_t *scope, js_value_t 
 }
 
 int
-js_run_script (js_env_t *env, const char *file, size_t len, js_value_t *source, js_value_t **result) {
+js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value_t *source, js_value_t **result) {
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) source, &env->exception);
 
   if (env->exception) return -1;
@@ -274,7 +274,7 @@ js_run_script (js_env_t *env, const char *file, size_t len, js_value_t *source, 
 
   JSStringRef url = JSStringCreateWithUTF8CString(file);
 
-  JSValueRef value = JSEvaluateScript(env->context, ref, NULL, url, 1, &env->exception);
+  JSValueRef value = JSEvaluateScript(env->context, ref, NULL, url, offset + 1, &env->exception);
 
   env->depth--;
 
@@ -303,7 +303,7 @@ js_run_script (js_env_t *env, const char *file, size_t len, js_value_t *source, 
 }
 
 int
-js_create_module (js_env_t *env, const char *name, size_t len, js_value_t *source, js_module_cb cb, void *data, js_module_t **result) {
+js_create_module (js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_cb cb, void *data, js_module_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
   return -1;
