@@ -324,6 +324,13 @@ js_delete_module (js_env_t *env, js_module_t *module) {
 }
 
 int
+js_get_module_name (js_env_t *env, js_module_t *module, const char **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
 js_set_module_export (js_env_t *env, js_module_t *module, js_value_t *name, js_value_t *value) {
   js_throw_error(env, NULL, "Unsupported operation");
 
