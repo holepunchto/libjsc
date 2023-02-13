@@ -1997,6 +1997,8 @@ js_throw_error (js_env_t *env, const char *code, const char *message) {
     if (env->exception) return -1;
   }
 
+  env->exception = error;
+
   return 0;
 }
 
@@ -2057,6 +2059,8 @@ js_throw_type_error (js_env_t *env, const char *code, const char *message) {
 
     if (env->exception) return -1;
   }
+
+  env->exception = error;
 
   return 0;
 }
@@ -2119,6 +2123,8 @@ js_throw_range_error (js_env_t *env, const char *code, const char *message) {
     if (env->exception) return -1;
   }
 
+  env->exception = error;
+
   return 0;
 }
 
@@ -2179,6 +2185,8 @@ js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
 
     if (env->exception) return -1;
   }
+
+  env->exception = error;
 
   return 0;
 }
