@@ -303,7 +303,7 @@ js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value
 }
 
 int
-js_create_module (js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_cb cb, void *data, js_module_t **result) {
+js_create_module (js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
   return -1;
@@ -332,6 +332,13 @@ js_get_module_name (js_env_t *env, js_module_t *module, const char **result) {
 
 int
 js_set_module_export (js_env_t *env, js_module_t *module, js_value_t *name, js_value_t *value) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_instantiate_module (js_env_t *env, js_module_t *module, js_module_cb cb, void *data) {
   js_throw_error(env, NULL, "Unsupported operation");
 
   return -1;
