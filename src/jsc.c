@@ -385,10 +385,10 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
 
   JSObjectSetProperty(
     env->context,
-    (JSObjectRef) value,
+    reference->value,
     ref,
     external,
-    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+    kJSPropertyAttributeDontEnum,
     NULL
   );
 
@@ -408,6 +408,13 @@ js_delete_reference (js_env_t *env, js_ref_t *reference) {
   JSStringRelease(ref);
 
   JSObjectSetPrivate((JSObjectRef) external, NULL);
+
+  JSObjectDeleteProperty(
+    env->context,
+    (JSObjectRef) reference->value,
+    ref,
+    NULL
+  );
 
   if (reference->count > 0) JSValueUnprotect(env->context, reference->value);
 
