@@ -24,11 +24,15 @@ list(APPEND tests
   create-function-with-ffi-receiver
   create-function-with-ffi-string
   create-function-with-ffi-uint8array
+  create-function-with-source
+  create-module-import-missing
   create-promise-reject
   create-promise-resolve
   create-reference
   create-reference-weak
   create-unsafe-arraybuffer
+  dynamic-import
+  dynamic-import-without-handler
   fatal-exception
   get-arraybuffer-info
   get-dataview-info
@@ -43,6 +47,10 @@ list(APPEND tests
   promise-rejection-unhandled
   run-module
   run-module-async
+  run-module-cyclic-import
+  run-module-nested-import
+  run-module-double-nested-import
+  run-module-throw
   run-script
   run-script-ignore-return
   run-script-throw
@@ -77,11 +85,18 @@ list(APPEND skipped_tests
   create-function-with-ffi-receiver
   create-function-with-ffi-string
   create-function-with-ffi-uint8array
+  create-module-import-missing
   create-promise-reject
   create-promise-resolve
   create-reference-weak
+  dynamic-import
+  dynamic-import-without-handler
   run-module
   run-module-async
+  run-module-cyclic-import
+  run-module-nested-import
+  run-module-double-nested-import
+  run-module-throw
   typeof-bigint
   wasm-async
   wrap-with-finalizer

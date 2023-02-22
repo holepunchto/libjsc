@@ -227,6 +227,11 @@ js_on_unhandled_rejection (js_env_t *env, js_unhandled_rejection_cb cb, void *da
 }
 
 int
+js_on_dynamic_import (js_env_t *env, js_dynamic_import_cb cb, void *data) {
+  return 0;
+}
+
+int
 js_get_env_loop (js_env_t *env, uv_loop_t **result) {
   *result = env->loop;
 
@@ -325,6 +330,13 @@ js_delete_module (js_env_t *env, js_module_t *module) {
 
 int
 js_get_module_name (js_env_t *env, js_module_t *module, const char **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_get_module_namespace (js_env_t *env, js_module_t *module, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
   return -1;
@@ -769,6 +781,55 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
   );
 
   JSStringRelease(ref);
+
+  *result = (js_value_t *) function;
+
+  return 0;
+}
+
+int
+js_create_function_with_source (js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
+  JSStringRef name_ref, file_ref;
+
+  if (name_len == (size_t) -1) {
+    name_ref = JSStringCreateWithUTF8CString(name);
+  } else {
+    char *copy = strndup(name, name_len);
+
+    name_ref = JSStringCreateWithUTF8CString(name);
+
+    free(copy);
+  }
+
+  if (file_len == (size_t) -1) {
+    file_ref = JSStringCreateWithUTF8CString(file);
+  } else {
+    char *copy = strndup(file, file_len);
+
+    file_ref = JSStringCreateWithUTF8CString(file);
+
+    free(copy);
+  }
+
+  JSStringRef *arg_refs = malloc(sizeof(JSStringRef) * args_len);
+
+  for (int i = 0; i < args_len; i++) {
+    arg_refs[i] = JSValueToStringCopy(env->context, (JSValueRef) args[i], NULL);
+  }
+
+  JSStringRef source_ref = JSValueToStringCopy(env->context, (JSValueRef) source, NULL);
+
+  JSObjectRef function = JSObjectMakeFunction(env->context, name_ref, args_len, arg_refs, source_ref, file_ref, offset, &env->exception);
+
+  JSStringRelease(name_ref);
+  JSStringRelease(file_ref);
+  JSStringRelease(source_ref);
+
+  for (int i = 0; i < args_len; i++) {
+    JSStringRelease(arg_refs[i]);
+  }
+
+  if (env->exception) return -1;
 
   *result = (js_value_t *) function;
 
