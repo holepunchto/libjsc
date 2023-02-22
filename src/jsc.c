@@ -749,17 +749,19 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
 
   if (len == (size_t) -1) {
     ref = JSStringCreateWithUTF8CString(name);
-  } else {
+  } else if (name) {
     char *copy = strndup(name, len);
 
     ref = JSStringCreateWithUTF8CString(name);
 
     free(copy);
+  } else {
+    ref = NULL;
   }
 
   JSObjectRef function = JSObjectMakeFunctionWithCallback(env->context, ref, on_function_call);
 
-  JSStringRelease(ref);
+  if (ref) JSStringRelease(ref);
 
   js_callback_t *callback = malloc(sizeof(js_callback_t));
 
@@ -793,22 +795,26 @@ js_create_function_with_source (js_env_t *env, const char *name, size_t name_len
 
   if (name_len == (size_t) -1) {
     name_ref = JSStringCreateWithUTF8CString(name);
-  } else {
+  } else if (name) {
     char *copy = strndup(name, name_len);
 
     name_ref = JSStringCreateWithUTF8CString(name);
 
     free(copy);
+  } else {
+    name_ref = NULL;
   }
 
   if (file_len == (size_t) -1) {
     file_ref = JSStringCreateWithUTF8CString(file);
-  } else {
+  } else if (file) {
     char *copy = strndup(file, file_len);
 
     file_ref = JSStringCreateWithUTF8CString(file);
 
     free(copy);
+  } else {
+    file = NULL;
   }
 
   JSStringRef *arg_refs = malloc(sizeof(JSStringRef) * args_len);
@@ -821,13 +827,14 @@ js_create_function_with_source (js_env_t *env, const char *name, size_t name_len
 
   JSObjectRef function = JSObjectMakeFunction(env->context, name_ref, args_len, arg_refs, source_ref, file_ref, offset, &env->exception);
 
-  JSStringRelease(name_ref);
-  JSStringRelease(file_ref);
-  JSStringRelease(source_ref);
+  if (name_ref) JSStringRelease(name_ref);
+  if (file_ref) JSStringRelease(file_ref);
 
   for (int i = 0; i < args_len; i++) {
     JSStringRelease(arg_refs[i]);
   }
+
+  JSStringRelease(source_ref);
 
   if (env->exception) return -1;
 
