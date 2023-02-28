@@ -111,6 +111,8 @@ static void
 on_uncaught_exception (js_env_t *env, js_value_t *error) {
   if (env->on_uncaught_exception) {
     env->on_uncaught_exception(env, error, env->uncaught_exception_data);
+  } else {
+    env->exception = error;
   }
 }
 
@@ -293,8 +295,6 @@ js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value
       env->exception = NULL;
 
       on_uncaught_exception(env, (js_value_t *) error);
-
-      env->exception = error;
     }
 
     return -1;
@@ -2010,8 +2010,6 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
       env->exception = NULL;
 
       on_uncaught_exception(env, (js_value_t *) error);
-
-      env->exception = error;
     }
 
     return -1;
