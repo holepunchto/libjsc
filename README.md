@@ -12,4 +12,4 @@ Being built on JavaScriptCore, the library has some differences from its V8 coun
 
 ## License
 
-ISC
+Apache-2.0
