@@ -112,7 +112,7 @@ on_uncaught_exception (js_env_t *env, js_value_t *error) {
   if (env->on_uncaught_exception) {
     env->on_uncaught_exception(env, error, env->uncaught_exception_data);
   } else {
-    env->exception = error;
+    env->exception = (JSValueRef) error;
   }
 }
 
