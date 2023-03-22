@@ -64,6 +64,7 @@ set_target_properties(
   jsc_static
   PROPERTIES
   OUTPUT_NAME jsc
+  PREFIX lib
 )
 
 target_link_libraries(
