@@ -1915,7 +1915,11 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
 
     if (env->exception) return -1;
 
-    *pdata = data;
+    size_t offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &env->exception);
+
+    if (env->exception) return -1;
+
+    *pdata = data + offset;
   }
 
   if (plen) {
