@@ -29,6 +29,7 @@
 #include <JavaScriptCore/JSObjectRef.h>
 #include <JavaScriptCore/JSValueRef.h>
 #include <JavaScriptCore/WebKitAvailability.h>
+
 #include <stdbool.h>
 
 #ifdef __cplusplus
@@ -94,6 +95,25 @@ JSContextGroupClearExecutionTimeLimit (JSContextGroupRef group) API_AVAILABLE(ma
 
 /*!
 @function
+@abstract Gets a whether or not remote inspection is enabled on the context.
+@param ctx The JSGlobalContext whose setting you want to get.
+@result The value of the setting, true if remote inspection is enabled, otherwise false.
+@discussion Remote inspection is true by default.
+*/
+JS_EXPORT bool
+JSGlobalContextGetRemoteInspectionEnabled (JSGlobalContextRef ctx) API_DEPRECATED_WITH_REPLACEMENT("JSGlobalContextIsInspectable", macos(10.10, 13.3), ios(8.0, 16.4));
+
+/*!
+@function
+@abstract Sets the remote inspection setting for a context.
+@param ctx The JSGlobalContext that you want to change.
+@param enabled The new remote inspection enabled setting for the context.
+*/
+JS_EXPORT void
+JSGlobalContextSetRemoteInspectionEnabled (JSGlobalContextRef ctx, bool enabled) API_DEPRECATED_WITH_REPLACEMENT("JSGlobalContextSetInspectable", macos(10.10, 13.3), ios(8.0, 16.4));
+
+/*!
+@function
 @abstract Gets the include native call stack when reporting exceptions setting for a context.
 @param ctx The JSGlobalContext whose setting you want to get.
 @result The value of the setting, true if remote inspection is enabled, otherwise false.
@@ -121,6 +141,16 @@ JSGlobalContextSetIncludesNativeCallStackWhenReportingExceptions (JSGlobalContex
 */
 JS_EXPORT void
 JSGlobalContextSetUnhandledRejectionCallback (JSGlobalContextRef ctx, JSObjectRef function, JSValueRef *exception) API_AVAILABLE(macos(10.15.4), ios(13.4));
+
+/*!
+@function
+@abstract Sets whether a context allows use of eval (or the Function constructor).
+@param ctx The JSGlobalContext that you want to change.
+@param enabled The new eval enabled setting for the context.
+@param message The error message to display when user attempts to call eval (or the Function constructor). Pass NULL when setting enabled to true.
+*/
+JS_EXPORT void
+JSGlobalContextSetEvalEnabled (JSGlobalContextRef ctx, bool enabled, JSStringRef message) API_AVAILABLE(macos(12.3), ios(15.4));
 
 #ifdef __cplusplus
 }
