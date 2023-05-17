@@ -30,6 +30,8 @@ list(APPEND tests
   create-promise-resolve
   create-reference
   create-reference-weak
+  create-string-utf8
+  create-string-utf8-with-null
   create-unsafe-arraybuffer
   dynamic-import
   dynamic-import-without-handler
@@ -88,6 +90,7 @@ list(APPEND skipped_tests
   create-module-import-missing
   create-promise-reject
   create-promise-resolve
+  create-string-utf8-with-null
   create-reference-weak
   dynamic-import
   dynamic-import-without-handler
