@@ -7,6 +7,7 @@
 #include <string.h>
 #include <utf.h>
 #include <uv.h>
+#include <wchar.h>
 
 #include <JavaScriptCore/JavaScriptCore.h>
 
@@ -678,18 +679,33 @@ js_create_bigint_uint64 (js_env_t *env, uint64_t value, js_value_t **result) {
 }
 
 int
-js_create_string_utf8 (js_env_t *env, const char *str, size_t len, js_value_t **result) {
+js_create_string_utf8 (js_env_t *env, const utf8_t *str, size_t len, js_value_t **result) {
   JSStringRef ref;
 
-  if (len == (size_t) -1) len = strlen(str);
+  if (len == (size_t) -1) len = strlen((char *) str);
 
-  size_t utf16_len = utf16_length_from_utf8((utf8_t *) str, len);
+  size_t utf16_len = utf16_length_from_utf8(str, len);
 
   utf16_t *utf16 = malloc(utf16_len * sizeof(utf16_t));
 
   utf8_convert_to_utf16le((utf8_t *) str, len, utf16);
 
   ref = JSStringCreateWithCharactersNoCopy(utf16, utf16_len);
+
+  *result = (js_value_t *) JSValueMakeString(env->context, ref);
+
+  JSStringRelease(ref);
+
+  return 0;
+}
+
+int
+js_create_string_utf16le (js_env_t *env, const utf16_t *str, size_t len, js_value_t **result) {
+  JSStringRef ref;
+
+  if (len == (size_t) -1) len = wcslen((wchar_t *) str);
+
+  ref = JSStringCreateWithCharacters(str, len);
 
   *result = (js_value_t *) JSValueMakeString(env->context, ref);
 
@@ -1636,7 +1652,7 @@ js_get_value_bigint_uint64 (js_env_t *env, js_value_t *value, uint64_t *result) 
 }
 
 int
-js_get_value_string_utf8 (js_env_t *env, js_value_t *value, char *str, size_t len, size_t *result) {
+js_get_value_string_utf8 (js_env_t *env, js_value_t *value, utf8_t *str, size_t len, size_t *result) {
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
 
   if (env->exception) return -1;
@@ -1648,10 +1664,43 @@ js_get_value_string_utf8 (js_env_t *env, js_value_t *value, char *str, size_t le
   if (str == NULL) {
     *result = utf8_length_from_utf16le(utf16, utf16_len);
   } else if (len != 0) {
-    size_t written = utf16le_convert_to_utf8(utf16, utf16_len, (utf8_t *) str);
+    size_t written = utf16le_convert_to_utf8(utf16, utf16_len, str);
 
     if (written < len) {
       str[written] = '\0';
+    }
+
+    if (result) {
+      *result = written;
+    }
+  } else if (result) {
+    *result = 0;
+  }
+
+  JSStringRelease(ref);
+
+  return 0;
+}
+
+int
+js_get_value_string_utf16le (js_env_t *env, js_value_t *value, utf16_t *str, size_t len, size_t *result) {
+  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return -1;
+
+  size_t utf16_len = JSStringGetLength(ref);
+
+  const JSChar *utf16 = JSStringGetCharactersPtr(ref);
+
+  if (str == NULL) {
+    *result = utf16_len;
+  } else if (len != 0) {
+    size_t written = len < utf16_len ? len : utf16_len;
+
+    memcpy(str, utf16, written * sizeof(utf16_t));
+
+    if (written < len) {
+      str[written] = L'\0';
     }
 
     if (result) {
