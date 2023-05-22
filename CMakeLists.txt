@@ -10,6 +10,10 @@ if(NOT TARGET js)
   add_subdirectory(vendor/libjs EXCLUDE_FROM_ALL)
 endif()
 
+if(NOT TARGET utf)
+  add_subdirectory(vendor/libutf EXCLUDE_FROM_ALL)
+endif()
+
 add_library(jsc OBJECT)
 
 set_target_properties(
@@ -41,6 +45,7 @@ target_include_directories(
   PUBLIC
     include
     $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:utf,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 add_library(jsc_shared SHARED $<TARGET_OBJECTS:jsc>)
@@ -55,6 +60,7 @@ target_link_libraries(
   jsc_shared
   PUBLIC
     uv
+    utf_shared
     "-framework JavaScriptCore"
 )
 
@@ -71,6 +77,7 @@ target_link_libraries(
   jsc_static
   PUBLIC
     uv_a
+    utf_static
     "-framework JavaScriptCore"
 )
 

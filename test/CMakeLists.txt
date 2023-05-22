@@ -90,7 +90,6 @@ list(APPEND skipped_tests
   create-module-import-missing
   create-promise-reject
   create-promise-resolve
-  create-string-utf8-with-null
   create-reference-weak
   dynamic-import
   dynamic-import-without-handler

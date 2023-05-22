@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <utf.h>
 #include <uv.h>
 
 #include <JavaScriptCore/JavaScriptCore.h>
@@ -680,15 +681,15 @@ int
 js_create_string_utf8 (js_env_t *env, const char *str, size_t len, js_value_t **result) {
   JSStringRef ref;
 
-  if (len == (size_t) -1) {
-    ref = JSStringCreateWithUTF8CString(str);
-  } else {
-    char *copy = strndup(str, len);
+  if (len == (size_t) -1) len = strlen(str);
 
-    ref = JSStringCreateWithUTF8CString(copy);
+  size_t utf16_len = utf16_length_from_utf8((utf8_t *) str, len);
 
-    free(copy);
-  }
+  utf16_t *utf16 = malloc(utf16_len * sizeof(utf16_t));
+
+  utf8_convert_to_utf16le((utf8_t *) str, len, utf16);
+
+  ref = JSStringCreateWithCharactersNoCopy(utf16, utf16_len);
 
   *result = (js_value_t *) JSValueMakeString(env->context, ref);
 
@@ -1640,13 +1641,21 @@ js_get_value_string_utf8 (js_env_t *env, js_value_t *value, char *str, size_t le
 
   if (env->exception) return -1;
 
+  size_t utf16_len = JSStringGetLength(ref);
+
+  const JSChar *utf16 = JSStringGetCharactersPtr(ref);
+
   if (str == NULL) {
-    *result = JSStringGetMaximumUTF8CStringSize(ref) - 1 /* NULL */;
+    *result = utf8_length_from_utf16le(utf16, utf16_len);
   } else if (len != 0) {
-    len = JSStringGetUTF8CString(ref, str, len) - 1 /* NULL */;
+    size_t written = utf16le_convert_to_utf8(utf16, utf16_len, (utf8_t *) str);
+
+    if (written < len) {
+      str[written] = '\0';
+    }
 
     if (result) {
-      *result = len;
+      *result = written;
     }
   } else if (result) {
     *result = 0;
