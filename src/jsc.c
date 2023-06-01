@@ -148,7 +148,7 @@ static void
 on_external_finalize (JSObjectRef external);
 
 int
-js_create_env (uv_loop_t *loop, js_platform_t *platform, js_env_t **result) {
+js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *options, js_env_t **result) {
   JSContextGroupRef group = JSContextGroupCreate();
 
   JSGlobalContextRef context = JSGlobalContextCreateInGroup(group, NULL);
