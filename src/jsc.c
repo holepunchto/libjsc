@@ -79,6 +79,14 @@ struct js_callback_info_s {
   JSObjectRef receiver;
 };
 
+struct js_arraybuffer_backing_store_s {
+  js_env_t *env;
+  uint32_t references;
+  size_t len;
+  uint8_t *data;
+  JSValueRef owner;
+};
+
 const char *js_platform_identifier = "javascriptcore";
 
 const char *js_platform_version = NULL;
@@ -1176,6 +1184,40 @@ js_create_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **resu
 }
 
 static void
+on_backed_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
+  js_arraybuffer_backing_store_t *backing_store = (js_arraybuffer_backing_store_t *) deallocatorContext;
+
+  if (--backing_store->references == 0) {
+    JSValueUnprotect(backing_store->env->context, backing_store->owner);
+
+    free(backing_store);
+  }
+}
+
+int
+js_create_arraybuffer_with_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
+  JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, backing_store->data, backing_store->len, on_backed_arraybuffer_finalize, backing_store, &env->exception);
+
+  if (env->exception) {
+    return -1;
+  }
+
+  backing_store->references++;
+
+  *result = (js_value_t *) arraybuffer;
+
+  if (data) {
+    *data = backing_store->data;
+  }
+
+  if (len) {
+    *len = backing_store->len;
+  }
+
+  return 0;
+}
+
+static void
 on_unsafe_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
   free(bytes);
 }
@@ -1242,6 +1284,76 @@ js_detach_arraybuffer (js_env_t *env, js_value_t *arraybuffer) {
   return -1;
 }
 
+int
+js_get_arraybuffer_backing_store (js_env_t *env, js_value_t *arraybuffer, js_arraybuffer_backing_store_t **result) {
+  js_arraybuffer_backing_store_t *backing_store = malloc(sizeof(js_arraybuffer_backing_store_t));
+
+  backing_store->env = env;
+  backing_store->references = 1;
+
+  backing_store->data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &env->exception);
+
+  if (env->exception) {
+    free(backing_store);
+
+    return -1;
+  }
+
+  backing_store->len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &env->exception);
+
+  if (env->exception) {
+    free(backing_store);
+
+    return -1;
+  }
+
+  backing_store->owner = (JSValueRef) arraybuffer;
+
+  JSValueProtect(env->context, backing_store->owner);
+
+  *result = backing_store;
+
+  return 0;
+}
+
+int
+js_create_sharedarraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_create_sharedarraybuffer_with_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_create_unsafe_sharedarraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_get_sharedarraybuffer_backing_store (js_env_t *env, js_value_t *sharedarraybuffer, js_arraybuffer_backing_store_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_release_arraybuffer_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store) {
+  if (--backing_store->references == 0) {
+    JSValueUnprotect(env->context, backing_store->owner);
+
+    free(backing_store);
+  }
+
+  return 0;
+}
 int
 js_set_arraybuffer_zero_fill_enabled (bool enabled) {
   return 0;
@@ -1517,6 +1629,23 @@ js_is_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
 int
 js_is_detached_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
   *result = false;
+
+  return 0;
+}
+
+int
+js_is_sharedarraybuffer (js_env_t *env, js_value_t *value, bool *result) {
+  JSStringRef ref = JSStringCreateWithUTF8CString("SharedArrayBuffer");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
+
+  if (env->exception) return -1;
 
   return 0;
 }
