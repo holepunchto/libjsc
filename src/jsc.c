@@ -1316,6 +1316,7 @@ js_get_arraybuffer_backing_store (js_env_t *env, js_value_t *arraybuffer, js_arr
   return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_sharedarraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -1323,6 +1324,7 @@ js_create_sharedarraybuffer (js_env_t *env, size_t len, void **data, js_value_t 
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_sharedarraybuffer_with_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -1330,6 +1332,7 @@ js_create_sharedarraybuffer_with_backing_store (js_env_t *env, js_arraybuffer_ba
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_unsafe_sharedarraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -1337,6 +1340,7 @@ js_create_unsafe_sharedarraybuffer (js_env_t *env, size_t len, void **data, js_v
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_get_sharedarraybuffer_backing_store (js_env_t *env, js_value_t *sharedarraybuffer, js_arraybuffer_backing_store_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
