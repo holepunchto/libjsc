@@ -41,6 +41,7 @@ struct js_env_s {
     JSClassRef finalizer;
     JSClassRef external;
     JSClassRef function;
+    JSClassRef constructor;
   } classes;
 };
 
@@ -77,6 +78,7 @@ struct js_callback_info_s {
   int argc;
   const JSValueRef *argv;
   JSObjectRef receiver;
+  JSValueRef new_target;
 };
 
 struct js_arraybuffer_backing_store_s {
@@ -155,6 +157,9 @@ on_function_finalize (JSObjectRef external);
 static void
 on_external_finalize (JSObjectRef external);
 
+static void
+on_constructor_finalize (JSObjectRef external);
+
 int
 js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *options, js_env_t **result) {
   JSContextGroupRef group = JSContextGroupCreate();
@@ -194,6 +199,10 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
   env->classes.external = JSClassCreate(&(JSClassDefinition){
     .finalize = on_external_finalize,
+  });
+
+  env->classes.constructor = JSClassCreate(&(JSClassDefinition){
+    .finalize = on_constructor_finalize,
   });
 
   js_value_t *fn;
@@ -475,6 +484,212 @@ js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
 int
 js_get_reference_value (js_env_t *env, js_ref_t *reference, js_value_t **result) {
   *result = (js_value_t *) reference->value;
+
+  return 0;
+}
+
+static void
+on_constructor_finalize (JSObjectRef external) {
+  js_callback_t *callback = (js_callback_t *) JSObjectGetPrivate(external);
+
+  free(callback);
+}
+
+static JSObjectRef
+on_constructor_call (JSContextRef context, JSObjectRef new_target, size_t argc, const JSValueRef argv[], JSValueRef *exception) {
+  JSObjectRef receiver = JSObjectMake(context, NULL, NULL);
+
+  JSObjectSetPrototype(context, receiver, JSObjectGetPrototype(context, new_target));
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_constructor");
+
+  JSValueRef external = JSObjectGetProperty(context, new_target, ref, NULL);
+
+  JSStringRelease(ref);
+
+  js_callback_t *callback = (js_callback_t *) JSObjectGetPrivate((JSObjectRef) external);
+
+  js_env_t *env = callback->env;
+
+  js_callback_info_t callback_info = {
+    .callback = callback,
+    .argc = argc,
+    .argv = argv,
+    .receiver = receiver,
+    .new_target = new_target,
+  };
+
+  js_value_t *result = callback->cb(env, &callback_info);
+
+  JSValueRef value;
+
+  if (result == NULL) value = JSValueMakeUndefined(env->context);
+  else value = (JSValueRef) result;
+
+  if (env->exception == NULL) return receiver;
+
+  *exception = env->exception;
+
+  return NULL;
+}
+
+int
+js_define_class (js_env_t *env, const char *name, size_t len, js_function_cb constructor, void *data, js_property_descriptor_t const properties[], size_t properties_len, js_value_t **result) {
+  int err;
+
+  JSStringRef ref;
+
+  JSObjectRef class = JSObjectMakeConstructor(env->context, NULL, on_constructor_call);
+
+  JSObjectRef prototype = JSObjectMake(env->context, NULL, NULL);
+
+  JSObjectSetPrototype(env->context, prototype, JSObjectGetPrototype(env->context, class));
+
+  JSObjectSetPrototype(env->context, class, prototype);
+
+  ref = JSStringCreateWithUTF8CString("constructor");
+
+  JSObjectSetProperty(
+    env->context,
+    prototype,
+    ref,
+    class,
+    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete,
+    &env->exception
+  );
+
+  JSStringRelease(ref);
+
+  if (env->exception) return -1;
+
+  size_t instance_properties_len = 0;
+  size_t static_properties_len = 0;
+
+  for (size_t i = 0; i < properties_len; i++) {
+    const js_property_descriptor_t *property = &properties[i];
+
+    if ((property->attributes & js_static) == 0) {
+      instance_properties_len++;
+    } else {
+      static_properties_len++;
+    }
+  }
+
+  if (instance_properties_len) {
+    js_property_descriptor_t *instance_properties = malloc(sizeof(js_property_descriptor_t) * instance_properties_len);
+
+    for (size_t i = 0, j = 0; i < properties_len; i++) {
+      const js_property_descriptor_t *property = &properties[i];
+
+      if ((property->attributes & js_static) == 0) {
+        instance_properties[j++] = *property;
+      }
+    }
+
+    err = js_define_properties(env, (js_value_t *) prototype, instance_properties, instance_properties_len);
+    assert(err == 0);
+
+    free(instance_properties);
+  }
+
+  if (static_properties_len) {
+    js_property_descriptor_t *static_properties = malloc(sizeof(js_property_descriptor_t) * static_properties_len);
+
+    for (size_t i = 0, j = 0; i < properties_len; i++) {
+      const js_property_descriptor_t *property = &properties[i];
+
+      if ((property->attributes & js_static) != 0) {
+        static_properties[j++] = *property;
+      }
+    }
+
+    err = js_define_properties(env, (js_value_t *) class, static_properties, static_properties_len);
+    assert(err == 0);
+
+    free(static_properties);
+  }
+
+  js_callback_t *callback = malloc(sizeof(js_callback_t));
+
+  callback->env = env;
+  callback->cb = constructor;
+  callback->data = data;
+
+  JSObjectRef external = JSObjectMake(env->context, env->classes.function, (void *) callback);
+
+  ref = JSStringCreateWithUTF8CString("__native_constructor");
+
+  JSObjectSetProperty(
+    env->context,
+    class,
+    ref,
+    external,
+    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+    NULL
+  );
+
+  JSStringRelease(ref);
+
+  *result = (js_value_t *) class;
+
+  return 0;
+}
+
+int
+js_define_properties (js_env_t *env, js_value_t *object, js_property_descriptor_t const properties[], size_t properties_len) {
+  int err;
+
+  for (size_t i = 0; i < properties_len; i++) {
+    const js_property_descriptor_t *property = &properties[i];
+
+    int flags = kJSPropertyAttributeNone;
+
+    if ((property->attributes & js_writable) == 0 && property->getter == NULL && property->setter == NULL) {
+      flags |= kJSPropertyAttributeReadOnly;
+    }
+
+    if ((property->attributes & js_enumerable) == 0) {
+      flags |= kJSPropertyAttributeDontEnum;
+    }
+
+    if ((property->attributes & js_configurable) == 0) {
+      flags |= kJSPropertyAttributeDontDelete;
+    }
+
+    JSValueRef value;
+
+    if (property->getter || property->setter) {
+      if (property->getter) {
+        js_value_t *fn;
+        err = js_create_function(env, property->name, -1, property->getter, property->data, &fn);
+        assert(err == 0);
+      }
+
+      if (property->setter) {
+        js_value_t *fn;
+        err = js_create_function(env, property->name, -1, property->setter, property->data, &fn);
+        assert(err == 0);
+      }
+
+      return -1;
+    } else if (property->method) {
+      js_value_t *fn;
+      err = js_create_function(env, property->name, -1, property->method, property->data, &fn);
+      assert(err == 0);
+
+      value = (JSValueRef) fn;
+    } else {
+      value = (JSValueRef) property->value;
+    }
+
+    JSStringRef name = JSStringCreateWithUTF8CString(property->name);
+
+    JSObjectSetProperty(env->context, (JSObjectRef) object, name, value, flags, &env->exception);
+
+    JSStringRelease(name);
+
+    if (env->exception) return -1;
+  }
 
   return 0;
 }
@@ -766,6 +981,7 @@ on_function_call (JSContextRef context, JSObjectRef function, JSObjectRef receiv
     .argc = argc,
     .argv = argv,
     .receiver = receiver,
+    .new_target = JSValueMakeUndefined(env->context),
   };
 
   js_value_t *result = callback->cb(env, &callback_info);
@@ -1500,6 +1716,15 @@ js_typeof (js_env_t *env, js_value_t *value, js_value_type_t *result) {
 }
 
 int
+js_instanceof (js_env_t *env, js_value_t *object, js_value_t *constructor, bool *result) {
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) object, (JSObjectRef) constructor, &env->exception);
+
+  if (env->exception) return -1;
+
+  return 0;
+}
+
+int
 js_is_undefined (js_env_t *env, js_value_t *value, bool *result) {
   *result = JSValueIsUndefined(env->context, (JSValueRef) value);
 
@@ -1884,6 +2109,13 @@ js_get_array_length (js_env_t *env, js_value_t *value, uint32_t *result) {
 }
 
 int
+js_get_prototype (js_env_t *env, js_value_t *object, js_value_t **result) {
+  *result = (js_value_t *) JSObjectGetPrototype(env->context, (JSObjectRef) object);
+
+  return 0;
+}
+
+int
 js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t **result) {
   JSValueRef value = JSObjectGetPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
 
@@ -2028,7 +2260,7 @@ js_delete_element (js_env_t *env, js_value_t *object, uint32_t index, bool *resu
 }
 
 int
-js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *argc, js_value_t *argv[], js_value_t **self, void **data) {
+js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *argc, js_value_t *argv[], js_value_t **receiver, void **data) {
   if (argv) {
     size_t i = 0, n = info->argc < *argc ? info->argc : *argc;
 
@@ -2051,13 +2283,20 @@ js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *arg
     *argc = info->argc;
   }
 
-  if (self) {
-    *self = (js_value_t *) info->receiver;
+  if (receiver) {
+    *receiver = (js_value_t *) info->receiver;
   }
 
   if (data) {
     *data = info->callback->data;
   }
+
+  return 0;
+}
+
+int
+js_get_new_target (js_env_t *env, const js_callback_info_t *info, js_value_t **result) {
+  *result = (js_value_t *) info->new_target;
 
   return 0;
 }
@@ -2202,6 +2441,33 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
   env->depth++;
 
   JSValueRef value = JSObjectCallAsFunction(env->context, (JSObjectRef) function, (JSObjectRef) receiver, argc, (const JSValueRef *) argv, &env->exception);
+
+  env->depth--;
+
+  if (env->exception) {
+    if (env->depth == 0) {
+      JSValueRef error = env->exception;
+
+      env->exception = NULL;
+
+      on_uncaught_exception(env, (js_value_t *) error);
+    }
+
+    return -1;
+  }
+
+  if (result) {
+    *result = (js_value_t *) value;
+  }
+
+  return 0;
+}
+
+int
+js_new_instance (js_env_t *env, js_value_t *constructor, size_t argc, js_value_t *const argv[], js_value_t **result) {
+  env->depth++;
+
+  JSValueRef value = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, argc, (const JSValueRef *) argv, &env->exception);
 
   env->depth--;
 

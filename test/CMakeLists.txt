@@ -37,6 +37,11 @@ list(APPEND tests
   create-string-utf8
   create-string-utf8-with-null
   create-unsafe-arraybuffer
+  define-class
+  define-class-with-value
+  define-class-with-static-value
+  define-class-with-method
+  define-class-with-static-method
   dynamic-import
   dynamic-import-without-handler
   fatal-exception
