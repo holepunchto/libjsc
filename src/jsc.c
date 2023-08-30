@@ -2464,6 +2464,33 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
 }
 
 int
+js_call_function_with_checkpoint (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
+  env->depth++;
+
+  JSValueRef value = JSObjectCallAsFunction(env->context, (JSObjectRef) function, (JSObjectRef) receiver, argc, (const JSValueRef *) argv, &env->exception);
+
+  env->depth--;
+
+  if (env->exception) {
+    if (env->depth == 0) {
+      JSValueRef error = env->exception;
+
+      env->exception = NULL;
+
+      on_uncaught_exception(env, (js_value_t *) error);
+    }
+
+    return -1;
+  }
+
+  if (result) {
+    *result = (js_value_t *) value;
+  }
+
+  return 0;
+}
+
+int
 js_new_instance (js_env_t *env, js_value_t *constructor, size_t argc, js_value_t *const argv[], js_value_t **result) {
   env->depth++;
 
