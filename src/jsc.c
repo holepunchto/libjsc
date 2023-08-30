@@ -1995,7 +1995,7 @@ js_get_value_double (js_env_t *env, js_value_t *value, double *result) {
 
 // https://bugs.webkit.org/show_bug.cgi?id=250511
 int
-js_get_value_bigint_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
+js_get_value_bigint_int64 (js_env_t *env, js_value_t *value, int64_t *result, bool *lossless) {
   js_throw_error(env, NULL, "Unsupported operation");
 
   return -1;
@@ -2003,7 +2003,7 @@ js_get_value_bigint_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
 
 // https://bugs.webkit.org/show_bug.cgi?id=250511
 int
-js_get_value_bigint_uint64 (js_env_t *env, js_value_t *value, uint64_t *result) {
+js_get_value_bigint_uint64 (js_env_t *env, js_value_t *value, uint64_t *result, bool *lossless) {
   js_throw_error(env, NULL, "Unsupported operation");
 
   return -1;
