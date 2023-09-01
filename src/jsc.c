@@ -1894,9 +1894,13 @@ js_is_sharedarraybuffer (js_env_t *env, js_value_t *value, bool *result) {
 
   if (env->exception) return js_propagate_exception(env);
 
-  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
+  if (JSValueIsUndefined(env->context, constructor)) {
+    *result = false;
+  } else {
+    *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
 
-  if (env->exception) return js_propagate_exception(env);
+    if (env->exception) return js_propagate_exception(env);
+  }
 
   return 0;
 }
