@@ -414,7 +414,7 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
     reference->value,
     ref,
     external,
-    kJSPropertyAttributeDontEnum,
+    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
     NULL
   );
 
@@ -437,7 +437,7 @@ js_delete_reference (js_env_t *env, js_ref_t *reference) {
 
   JSObjectDeleteProperty(
     env->context,
-    (JSObjectRef) reference->value,
+    reference->value,
     ref,
     NULL
   );
@@ -2324,7 +2324,15 @@ js_get_arraybuffer_info (js_env_t *env, js_value_t *arraybuffer, void **pdata, s
 
 int
 js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_type_t *ptype, void **pdata, size_t *plen, js_value_t **parraybuffer, size_t *poffset) {
+  size_t offset;
+
   JSObjectRef arraybuffer;
+
+  if (pdata || poffset) {
+    offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &env->exception);
+
+    if (env->exception) return -1;
+  }
 
   if (pdata || parraybuffer) {
     arraybuffer = JSObjectGetTypedArrayBuffer(env->context, (JSObjectRef) typedarray, &env->exception);
@@ -2345,10 +2353,6 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
 
     if (env->exception) return -1;
 
-    size_t offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &env->exception);
-
-    if (env->exception) return -1;
-
     *pdata = data + offset;
   }
 
@@ -2365,10 +2369,6 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
   }
 
   if (poffset) {
-    size_t offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &env->exception);
-
-    if (env->exception) return -1;
-
     *poffset = offset;
   }
 
@@ -2377,7 +2377,23 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
 
 int
 js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t *plen, js_value_t **parraybuffer, size_t *poffset) {
+  size_t offset;
+
   JSObjectRef arraybuffer;
+
+  if (pdata || poffset) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("byteOffset");
+
+    JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &env->exception);
+
+    JSStringRelease(ref);
+
+    if (env->exception) return -1;
+
+    offset = (size_t) JSValueToNumber(env->context, value, &env->exception);
+
+    if (env->exception) return -1;
+  }
 
   if (pdata || parraybuffer) {
     JSStringRef ref = JSStringCreateWithUTF8CString("buffer");
@@ -2394,7 +2410,7 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
 
     if (env->exception) return -1;
 
-    *pdata = data;
+    *pdata = data + offset;
   }
 
   if (plen) {
@@ -2418,19 +2434,7 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
   }
 
   if (poffset) {
-    JSStringRef ref = JSStringCreateWithUTF8CString("byteOffset");
-
-    JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &env->exception);
-
-    JSStringRelease(ref);
-
-    if (env->exception) return -1;
-
-    double offset = JSValueToNumber(env->context, value, &env->exception);
-
-    if (env->exception) return -1;
-
-    *poffset = (size_t) offset;
+    *poffset = offset;
   }
 
   return 0;
