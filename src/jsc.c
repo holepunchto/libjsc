@@ -47,6 +47,7 @@ struct js_env_s {
 
 struct js_ref_s {
   JSObjectRef value;
+  JSValueRef symbol;
   uint32_t count;
 };
 
@@ -409,16 +410,20 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
 
-  JSObjectSetProperty(
+  reference->symbol = JSValueMakeSymbol(env->context, ref);
+
+  JSValueProtect(env->context, reference->symbol);
+
+  JSStringRelease(ref);
+
+  JSObjectSetPropertyForKey(
     env->context,
     reference->value,
-    ref,
+    reference->symbol,
     external,
     kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
     NULL
   );
-
-  JSStringRelease(ref);
 
   *result = reference;
 
@@ -427,22 +432,20 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
 
 int
 js_delete_reference (js_env_t *env, js_ref_t *reference) {
-  JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
-
-  JSValueRef external = JSObjectGetProperty(env->context, reference->value, ref, NULL);
-
-  JSStringRelease(ref);
+  JSValueRef external = JSObjectGetPropertyForKey(env->context, reference->value, reference->symbol, NULL);
 
   JSObjectSetPrivate((JSObjectRef) external, NULL);
 
-  JSObjectDeleteProperty(
+  JSObjectDeletePropertyForKey(
     env->context,
     reference->value,
-    ref,
+    reference->symbol,
     NULL
   );
 
   if (reference->count > 0) JSValueUnprotect(env->context, reference->value);
+
+  JSValueUnprotect(env->context, reference->symbol);
 
   free(reference);
 
