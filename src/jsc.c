@@ -161,6 +161,19 @@ on_external_finalize (JSObjectRef external);
 static void
 on_constructor_finalize (JSObjectRef external);
 
+static inline int
+js_propagate_exception (js_env_t *env) {
+  if (env->depth == 0) {
+    JSValueRef error = env->exception;
+
+    env->exception = NULL;
+
+    on_uncaught_exception(env, (js_value_t *) error);
+  }
+
+  return -1;
+}
+
 int
 js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *options, js_env_t **result) {
   JSContextGroupRef group = JSContextGroupCreate();
@@ -300,7 +313,7 @@ int
 js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value_t *source, js_value_t **result) {
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) source, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   env->depth++;
 
@@ -315,17 +328,7 @@ js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value
   JSStringRelease(ref);
   JSStringRelease(url);
 
-  if (env->exception) {
-    if (env->depth == 0) {
-      JSValueRef error = env->exception;
-
-      env->exception = NULL;
-
-      on_uncaught_exception(env, (js_value_t *) error);
-    }
-
-    return -1;
-  }
+  if (env->exception) return js_propagate_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -533,6 +536,8 @@ on_constructor_call (JSContextRef context, JSObjectRef new_target, size_t argc, 
 
   *exception = env->exception;
 
+  env->exception = NULL;
+
   return NULL;
 }
 
@@ -563,7 +568,7 @@ js_define_class (js_env_t *env, const char *name, size_t len, js_function_cb con
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   size_t instance_properties_len = 0;
   size_t static_properties_len = 0;
@@ -691,7 +696,7 @@ js_define_properties (js_env_t *env, js_value_t *object, js_property_descriptor_
 
     JSStringRelease(name);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   return 0;
@@ -727,10 +732,16 @@ js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_
     ref,
     external,
     kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
-    NULL
+    &env->exception
   );
 
   JSStringRelease(ref);
+
+  if (env->exception) {
+    free(finalizer);
+
+    return js_propagate_exception(env);
+  }
 
   if (result) js_create_reference(env, object, 0, result);
 
@@ -766,9 +777,11 @@ js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
     *result = finalizer->data;
   }
 
-  JSObjectDeleteProperty(env->context, (JSObjectRef) object, ref, NULL);
+  JSObjectDeleteProperty(env->context, (JSObjectRef) object, ref, &env->exception);
 
   JSStringRelease(ref);
+
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -809,7 +822,7 @@ js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb 
   JSObjectRef external;
 
   if (JSObjectHasProperty(env->context, (JSObjectRef) object, ref)) {
-    external = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+    external = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
   } else {
     external = JSObjectMake(env->context, env->classes.finalizer, NULL);
 
@@ -819,11 +832,17 @@ js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb 
       ref,
       external,
       kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
-      NULL
+      &env->exception
     );
   }
 
   JSStringRelease(ref);
+
+  if (env->exception) {
+    free(finalizer);
+
+    return js_propagate_exception(env);
+  }
 
   prev->next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
 
@@ -872,13 +891,13 @@ js_create_bigint_int64 (js_env_t *env, int64_t value, js_value_t **result) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
 
   *result = (js_value_t *) JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -893,13 +912,13 @@ js_create_bigint_uint64 (js_env_t *env, uint64_t value, js_value_t **result) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
 
   *result = (js_value_t *) JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -944,7 +963,7 @@ int
 js_create_symbol (js_env_t *env, js_value_t *description, js_value_t **result) {
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) description, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) JSValueMakeSymbol(env->context, ref);
 
@@ -997,6 +1016,8 @@ on_function_call (JSContextRef context, JSObjectRef function, JSObjectRef receiv
   if (env->exception == NULL) return value;
 
   *exception = env->exception;
+
+  env->exception = NULL;
 
   return NULL;
 }
@@ -1094,7 +1115,7 @@ js_create_function_with_source (js_env_t *env, const char *name, size_t name_len
 
   JSStringRelease(source_ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) function;
 
@@ -1110,7 +1131,7 @@ int
 js_create_array (js_env_t *env, js_value_t **result) {
   *result = (js_value_t *) JSObjectMakeArray(env->context, 0, NULL, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1121,7 +1142,7 @@ js_create_array_with_length (js_env_t *env, size_t len, js_value_t **result) {
 
   *result = (js_value_t *) JSObjectMakeArray(env->context, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1163,13 +1184,13 @@ js_create_date (js_env_t *env, double time, js_value_t **result) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) time)};
 
   *result = (js_value_t *) JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1180,7 +1201,7 @@ js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_
 
   JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (code) {
     JSStringRef ref = JSStringCreateWithUTF8CString("code");
@@ -1196,7 +1217,7 @@ js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   *result = (js_value_t *) error;
@@ -1214,13 +1235,13 @@ js_create_type_error (js_env_t *env, js_value_t *code, js_value_t *message, js_v
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   JSValueRef argv[1] = {(JSValueRef) message};
 
   JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (code) {
     JSStringRef ref = JSStringCreateWithUTF8CString("code");
@@ -1236,7 +1257,7 @@ js_create_type_error (js_env_t *env, js_value_t *code, js_value_t *message, js_v
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   *result = (js_value_t *) error;
@@ -1254,13 +1275,13 @@ js_create_range_error (js_env_t *env, js_value_t *code, js_value_t *message, js_
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   JSValueRef argv[1] = {(JSValueRef) message};
 
   JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (code) {
     JSStringRef ref = JSStringCreateWithUTF8CString("code");
@@ -1276,7 +1297,7 @@ js_create_range_error (js_env_t *env, js_value_t *code, js_value_t *message, js_
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   *result = (js_value_t *) error;
@@ -1294,13 +1315,13 @@ js_create_syntax_error (js_env_t *env, js_value_t *code, js_value_t *message, js
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   JSValueRef argv[1] = {(JSValueRef) message};
 
   JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (code) {
     JSStringRef ref = JSStringCreateWithUTF8CString("code");
@@ -1316,7 +1337,7 @@ js_create_syntax_error (js_env_t *env, js_value_t *code, js_value_t *message, js
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   *result = (js_value_t *) error;
@@ -1330,7 +1351,7 @@ js_create_promise (js_env_t *env, js_deferred_t **deferred, js_value_t **promise
 
   JSObjectRef value = JSObjectMakeDeferredPromise(env->context, &resolve, &reject, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   js_deferred_t *result = malloc(sizeof(js_deferred_t));
 
@@ -1349,7 +1370,7 @@ js_resolve_deferred (js_env_t *env, js_deferred_t *deferred, js_value_t *resolut
 
   JSObjectCallAsFunction(env->context, deferred->resolve, NULL, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1360,7 +1381,7 @@ js_reject_deferred (js_env_t *env, js_deferred_t *deferred, js_value_t *resoluti
 
   JSObjectCallAsFunction(env->context, deferred->reject, NULL, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1385,18 +1406,18 @@ int
 js_create_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
   JSObjectRef typedarray = JSObjectMakeTypedArray(env->context, kJSTypedArrayTypeUint8Array, len, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   JSObjectRef arraybuffer = JSObjectGetTypedArrayBuffer(env->context, typedarray, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) arraybuffer;
 
   if (data) {
     *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   return 0;
@@ -1417,9 +1438,7 @@ int
 js_create_arraybuffer_with_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
   JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, backing_store->data, backing_store->len, on_backed_arraybuffer_finalize, backing_store, &env->exception);
 
-  if (env->exception) {
-    return -1;
-  }
+  if (env->exception) return js_propagate_exception(env);
 
   backing_store->references++;
 
@@ -1450,7 +1469,7 @@ js_create_unsafe_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t
   if (env->exception) {
     free(bytes);
 
-    return -1;
+    return js_propagate_exception(env);
   }
 
   *result = (js_value_t *) arraybuffer;
@@ -1487,7 +1506,7 @@ js_create_external_arraybuffer (js_env_t *env, void *data, size_t len, js_finali
   if (env->exception) {
     free(finalizer);
 
-    return -1;
+    return js_propagate_exception(env);
   }
 
   *result = (js_value_t *) arraybuffer;
@@ -1515,7 +1534,7 @@ js_get_arraybuffer_backing_store (js_env_t *env, js_value_t *arraybuffer, js_arr
   if (env->exception) {
     free(backing_store);
 
-    return -1;
+    return js_propagate_exception(env);
   }
 
   backing_store->len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &env->exception);
@@ -1523,7 +1542,7 @@ js_get_arraybuffer_backing_store (js_env_t *env, js_value_t *arraybuffer, js_arr
   if (env->exception) {
     free(backing_store);
 
-    return -1;
+    return js_propagate_exception(env);
   }
 
   backing_store->owner = (JSValueRef) arraybuffer;
@@ -1654,7 +1673,7 @@ js_create_typedarray (js_env_t *env, js_typedarray_type_t type, size_t len, js_v
     &env->exception
   );
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) typedarray;
 
@@ -1669,13 +1688,13 @@ js_create_dataview (js_env_t *env, size_t len, js_value_t *arraybuffer, size_t o
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   JSValueRef argv[3] = {(JSValueRef) arraybuffer, JSValueMakeNumber(env->context, offset), JSValueMakeNumber(env->context, len)};
 
   JSObjectRef dataview = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 3, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) dataview;
 
@@ -1722,7 +1741,7 @@ int
 js_instanceof (js_env_t *env, js_value_t *object, js_value_t *constructor, bool *result) {
   *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) object, (JSObjectRef) constructor, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1820,11 +1839,11 @@ js_is_error (js_env_t *env, js_value_t *value, bool *result) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1837,11 +1856,11 @@ js_is_promise (js_env_t *env, js_value_t *value, bool *result) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1850,7 +1869,7 @@ int
 js_is_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = type == kJSTypedArrayTypeArrayBuffer;
 
@@ -1873,11 +1892,11 @@ js_is_sharedarraybuffer (js_env_t *env, js_value_t *value, bool *result) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1886,7 +1905,7 @@ int
 js_is_typedarray (js_env_t *env, js_value_t *value, bool *result) {
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = type != kJSTypedArrayTypeNone && type != kJSTypedArrayTypeArrayBuffer;
 
@@ -1901,11 +1920,11 @@ js_is_dataview (js_env_t *env, js_value_t *value, bool *result) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -1956,7 +1975,7 @@ int
 js_get_value_int32 (js_env_t *env, js_value_t *value, int32_t *result) {
   double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (int32_t) number;
 
@@ -1967,7 +1986,7 @@ int
 js_get_value_uint32 (js_env_t *env, js_value_t *value, uint32_t *result) {
   double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (uint32_t) number;
 
@@ -1978,7 +1997,7 @@ int
 js_get_value_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
   double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (int64_t) number;
 
@@ -1989,7 +2008,7 @@ int
 js_get_value_double (js_env_t *env, js_value_t *value, double *result) {
   double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = number;
 
@@ -2016,7 +2035,7 @@ int
 js_get_value_string_utf8 (js_env_t *env, js_value_t *value, utf8_t *str, size_t len, size_t *result) {
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   size_t utf16_len = JSStringGetLength(ref);
 
@@ -2047,7 +2066,7 @@ int
 js_get_value_string_utf16le (js_env_t *env, js_value_t *value, utf16_t *str, size_t len, size_t *result) {
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   size_t utf16_len = JSStringGetLength(ref);
 
@@ -2089,7 +2108,7 @@ int
 js_get_value_date (js_env_t *env, js_value_t *value, double *result) {
   *result = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -2102,11 +2121,11 @@ js_get_array_length (js_env_t *env, js_value_t *value, uint32_t *result) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (uint32_t) JSValueToNumber(env->context, length, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -2122,7 +2141,7 @@ int
 js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t **result) {
   JSValueRef value = JSObjectGetPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) value;
 
@@ -2133,7 +2152,7 @@ int
 js_has_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
   *result = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -2142,7 +2161,7 @@ int
 js_set_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *value) {
   JSObjectSetPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, (JSValueRef) value, kJSPropertyAttributeNone, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -2151,7 +2170,7 @@ int
 js_delete_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
   bool value = JSObjectDeletePropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (result) {
     *result = value;
@@ -2168,7 +2187,7 @@ js_get_named_property (js_env_t *env, js_value_t *object, const char *name, js_v
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) value;
 
@@ -2194,7 +2213,7 @@ js_set_named_property (js_env_t *env, js_value_t *object, const char *name, js_v
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -2207,7 +2226,7 @@ js_delete_named_property (js_env_t *env, js_value_t *object, const char *name, b
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (result) {
     *result = value;
@@ -2220,7 +2239,7 @@ int
 js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **result) {
   JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) object, index, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) value;
 
@@ -2231,7 +2250,7 @@ int
 js_has_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result) {
   JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) object, index, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   *result = !JSValueIsUndefined(env->context, value);
 
@@ -2242,7 +2261,7 @@ int
 js_set_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t *value) {
   JSObjectSetPropertyAtIndex(env->context, (JSObjectRef) object, index, (JSValueRef) value, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -2253,7 +2272,7 @@ js_delete_element (js_env_t *env, js_value_t *object, uint32_t index, bool *resu
 
   bool value = JSObjectDeletePropertyForKey(env->context, (JSObjectRef) object, key, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (result) {
     *result = value;
@@ -2308,11 +2327,11 @@ int
 js_get_arraybuffer_info (js_env_t *env, js_value_t *arraybuffer, void **pdata, size_t *plen) {
   uint8_t *data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   size_t len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (pdata) {
     *pdata = data;
@@ -2334,19 +2353,19 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
   if (pdata || poffset) {
     offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   if (pdata || parraybuffer) {
     arraybuffer = JSObjectGetTypedArrayBuffer(env->context, (JSObjectRef) typedarray, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   if (ptype) {
     JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) typedarray, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
 
     *ptype = js_convert_to_typedarray_type(type);
   }
@@ -2354,7 +2373,7 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
   if (pdata) {
     void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
 
     *pdata = data + offset;
   }
@@ -2362,7 +2381,7 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
   if (plen) {
     size_t len = JSObjectGetTypedArrayLength(env->context, (JSObjectRef) typedarray, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
 
     *plen = len;
   }
@@ -2391,11 +2410,11 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
 
     offset = (size_t) JSValueToNumber(env->context, value, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   if (pdata || parraybuffer) {
@@ -2405,13 +2424,13 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   if (pdata) {
     void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
 
     *pdata = data + offset;
   }
@@ -2423,11 +2442,11 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
 
     double len = JSValueToNumber(env->context, value, &env->exception);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
 
     *plen = (size_t) len;
   }
@@ -2451,17 +2470,7 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
 
   env->depth--;
 
-  if (env->exception) {
-    if (env->depth == 0) {
-      JSValueRef error = env->exception;
-
-      env->exception = NULL;
-
-      on_uncaught_exception(env, (js_value_t *) error);
-    }
-
-    return -1;
-  }
+  if (env->exception) return js_propagate_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -2478,17 +2487,7 @@ js_call_function_with_checkpoint (js_env_t *env, js_value_t *receiver, js_value_
 
   env->depth--;
 
-  if (env->exception) {
-    if (env->depth == 0) {
-      JSValueRef error = env->exception;
-
-      env->exception = NULL;
-
-      on_uncaught_exception(env, (js_value_t *) error);
-    }
-
-    return -1;
-  }
+  if (env->exception) return js_propagate_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -2505,17 +2504,7 @@ js_new_instance (js_env_t *env, js_value_t *constructor, size_t argc, js_value_t
 
   env->depth--;
 
-  if (env->exception) {
-    if (env->depth == 0) {
-      JSValueRef error = env->exception;
-
-      env->exception = NULL;
-
-      on_uncaught_exception(env, (js_value_t *) error);
-    }
-
-    return -1;
-  }
+  if (env->exception) return js_propagate_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -2564,7 +2553,7 @@ js_throw_error (js_env_t *env, const char *code, const char *message) {
 
   JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -2586,10 +2575,12 @@ js_throw_error (js_env_t *env, const char *code, const char *message) {
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   env->exception = error;
+
+  js_propagate_exception(env);
 
   return 0;
 }
@@ -2617,7 +2608,7 @@ js_throw_type_error (js_env_t *env, const char *code, const char *message) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   ref = JSStringCreateWithUTF8CString(message);
 
@@ -2627,7 +2618,7 @@ js_throw_type_error (js_env_t *env, const char *code, const char *message) {
 
   JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -2649,10 +2640,12 @@ js_throw_type_error (js_env_t *env, const char *code, const char *message) {
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   env->exception = error;
+
+  js_propagate_exception(env);
 
   return 0;
 }
@@ -2680,7 +2673,7 @@ js_throw_range_error (js_env_t *env, const char *code, const char *message) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   ref = JSStringCreateWithUTF8CString(message);
 
@@ -2690,7 +2683,7 @@ js_throw_range_error (js_env_t *env, const char *code, const char *message) {
 
   JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -2712,10 +2705,12 @@ js_throw_range_error (js_env_t *env, const char *code, const char *message) {
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   env->exception = error;
+
+  js_propagate_exception(env);
 
   return 0;
 }
@@ -2743,7 +2738,7 @@ js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
 
   JSStringRelease(ref);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   ref = JSStringCreateWithUTF8CString(message);
 
@@ -2753,7 +2748,7 @@ js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
 
   JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
 
-  if (env->exception) return -1;
+  if (env->exception) return js_propagate_exception(env);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -2775,10 +2770,12 @@ js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
 
     JSStringRelease(ref);
 
-    if (env->exception) return -1;
+    if (env->exception) return js_propagate_exception(env);
   }
 
   env->exception = error;
+
+  js_propagate_exception(env);
 
   return 0;
 }
