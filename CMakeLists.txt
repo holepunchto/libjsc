@@ -61,6 +61,7 @@ target_link_libraries(
   PUBLIC
     uv
     utf_shared
+    "-framework CoreFoundation"
     "-framework JavaScriptCore"
 )
 

@@ -9,6 +9,7 @@
 #include <uv.h>
 #include <wchar.h>
 
+#include <CoreFoundation/CoreFoundation.h>
 #include <JavaScriptCore/JavaScriptCore.h>
 
 #include "jsc.h"
@@ -90,9 +91,11 @@ struct js_arraybuffer_backing_store_s {
   JSValueRef owner;
 };
 
-const char *js_platform_identifier = "javascriptcore";
+static const char *js_platform_identifier = "javascriptcore";
 
-const char *js_platform_version = NULL;
+static const char *js_platform_version = NULL;
+
+static uv_once_t js_platform_version_guard = UV_ONCE_INIT;
 
 int
 js_create_platform (uv_loop_t *loop, const js_platform_options_t *options, js_platform_t **result) {
@@ -109,6 +112,46 @@ js_create_platform (uv_loop_t *loop, const js_platform_options_t *options, js_pl
 int
 js_destroy_platform (js_platform_t *platform) {
   free(platform);
+
+  return 0;
+}
+
+int
+js_get_platform_identifier (js_platform_t *platform, const char **result) {
+  *result = js_platform_identifier;
+
+  return 0;
+}
+
+static void
+on_platform_version_init () {
+  CFStringRef ref;
+
+  ref = CFStringCreateWithCString(NULL, "com.apple.JavaScriptCore", kCFStringEncodingUTF8);
+
+  CFBundleRef bundle = CFBundleGetBundleWithIdentifier(ref);
+
+  CFRelease(ref);
+
+  ref = CFStringCreateWithCString(NULL, "CFBundleVersion", kCFStringEncodingUTF8);
+
+  CFStringRef version = CFBundleGetValueForInfoDictionaryKey(bundle, ref);
+
+  CFRelease(ref);
+
+  const char *ptr = CFStringGetCStringPtr(version, kCFStringEncodingUTF8);
+
+  if (ptr) js_platform_version = strdup(ptr);
+
+  CFRelease(version);
+  CFRelease(bundle);
+}
+
+int
+js_get_platform_version (js_platform_t *platform, const char **result) {
+  uv_once(&js_platform_version_guard, on_platform_version_init);
+
+  *result = js_platform_version;
 
   return 0;
 }
