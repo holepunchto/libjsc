@@ -79,6 +79,7 @@ target_link_libraries(
   PUBLIC
     uv_a
     utf_static
+    "-framework CoreFoundation"
     "-framework JavaScriptCore"
 )
 
