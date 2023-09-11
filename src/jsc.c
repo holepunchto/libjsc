@@ -451,8 +451,6 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
   reference->count = count;
 
   if (JSValueIsObject(env->context, reference->value)) {
-    if (reference->count > 0) JSValueProtect(env->context, reference->value);
-
     JSObjectRef external = JSObjectMake(env->context, env->classes.reference, (void *) reference);
 
     JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
@@ -471,6 +469,8 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
       kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
       NULL
     );
+
+    if (reference->count > 0) JSValueProtect(env->context, reference->value);
   } else {
     if (reference->count == 0) {
       js_throw_errorf(env, NULL, "Cannot make weak reference to non-object type");
@@ -522,9 +522,7 @@ js_reference_ref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
     if (reference->count == 1) JSValueProtect(env->context, reference->value);
   }
 
-  if (result) {
-    *result = reference->count;
-  }
+  if (result) *result = reference->count;
 
   return 0;
 }
@@ -537,19 +535,19 @@ js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
     return -1;
   }
 
-  if (reference->count == 1 && !JSValueIsObject(env->context, reference->value)) {
-    js_throw_errorf(env, NULL, "Cannot make weak reference to non-object type");
+  if (reference->count == 1) {
+    if (JSValueIsObject(env->context, reference->value)) {
+      JSValueUnprotect(env->context, reference->value);
+    } else {
+      js_throw_errorf(env, NULL, "Cannot make weak reference to non-object type");
 
-    return -1;
+      return -1;
+    }
   }
 
   reference->count--;
 
-  if (reference->count == 0) JSValueUnprotect(env->context, reference->value);
-
-  if (result) {
-    *result = reference->count;
-  }
+  if (result) *result = reference->count;
 
   return 0;
 }
