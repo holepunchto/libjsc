@@ -47,7 +47,7 @@ struct js_env_s {
 };
 
 struct js_ref_s {
-  JSObjectRef value;
+  JSValueRef value;
   JSValueRef symbol;
   uint32_t count;
 };
@@ -447,29 +447,43 @@ int
 js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t **result) {
   js_ref_t *reference = malloc(sizeof(js_ref_t));
 
-  reference->value = (JSObjectRef) value;
+  reference->value = (JSValueRef) value;
   reference->count = count;
 
-  if (reference->count > 0) JSValueProtect(env->context, reference->value);
+  if (JSValueIsObject(env->context, reference->value)) {
+    if (reference->count > 0) JSValueProtect(env->context, reference->value);
 
-  JSObjectRef external = JSObjectMake(env->context, env->classes.reference, (void *) reference);
+    JSObjectRef external = JSObjectMake(env->context, env->classes.reference, (void *) reference);
 
-  JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
+    JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
 
-  reference->symbol = JSValueMakeSymbol(env->context, ref);
+    reference->symbol = JSValueMakeSymbol(env->context, ref);
 
-  JSValueProtect(env->context, reference->symbol);
+    JSValueProtect(env->context, reference->symbol);
 
-  JSStringRelease(ref);
+    JSStringRelease(ref);
 
-  JSObjectSetPropertyForKey(
-    env->context,
-    reference->value,
-    reference->symbol,
-    external,
-    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
-    NULL
-  );
+    JSObjectSetPropertyForKey(
+      env->context,
+      (JSObjectRef) reference->value,
+      reference->symbol,
+      external,
+      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
+      NULL
+    );
+  } else {
+    if (reference->count == 0) {
+      js_throw_errorf(env, NULL, "Cannot make weak reference to non-object type");
+
+      free(reference);
+
+      return -1;
+    }
+
+    JSValueProtect(env->context, reference->value);
+
+    reference->symbol = NULL;
+  }
 
   *result = reference;
 
@@ -478,16 +492,18 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
 
 int
 js_delete_reference (js_env_t *env, js_ref_t *reference) {
-  JSValueRef external = JSObjectGetPropertyForKey(env->context, reference->value, reference->symbol, NULL);
+  if (JSValueIsObject(env->context, reference->value)) {
+    JSValueRef external = JSObjectGetPropertyForKey(env->context, (JSObjectRef) reference->value, reference->symbol, NULL);
 
-  JSObjectSetPrivate((JSObjectRef) external, NULL);
+    JSObjectSetPrivate((JSObjectRef) external, NULL);
 
-  JSObjectDeletePropertyForKey(
-    env->context,
-    reference->value,
-    reference->symbol,
-    NULL
-  );
+    JSObjectDeletePropertyForKey(
+      env->context,
+      (JSObjectRef) reference->value,
+      reference->symbol,
+      NULL
+    );
+  }
 
   if (reference->count > 0) JSValueUnprotect(env->context, reference->value);
 

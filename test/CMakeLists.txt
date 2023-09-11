@@ -30,9 +30,18 @@ list(APPEND tests
   create-module-import-missing
   create-promise-reject
   create-promise-resolve
-  create-reference
-  create-reference-multiple
-  create-reference-weak
+  create-reference-array
+  create-reference-bigint
+  create-reference-boolean
+  create-reference-function
+  create-reference-null
+  create-reference-number
+  create-reference-object
+  create-reference-object-multiple
+  create-reference-object-weak
+  create-reference-string
+  create-reference-symbol
+  create-reference-undefined
   create-sharedarraybuffer
   create-sharedarraybuffer-with-backing-store
   create-string-utf8
@@ -55,6 +64,8 @@ list(APPEND tests
   get-value-string-utf8
   get-value-string-utf8-length
   get-value-string-utf8-no-null
+  import-meta
+  import-meta-throw
   many-large-allocs
   many-small-allocs
   promise-rejection
@@ -105,11 +116,14 @@ list(APPEND skipped_tests
   create-module-import-missing
   create-promise-reject
   create-promise-resolve
-  create-reference-weak
+  create-reference-bigint
+  create-reference-object-weak
   create-sharedarraybuffer
   create-sharedarraybuffer-with-backing-store
   dynamic-import
   dynamic-import-without-handler
+  import-meta
+  import-meta-throw
   run-module
   run-module-async
   run-module-cyclic-import
