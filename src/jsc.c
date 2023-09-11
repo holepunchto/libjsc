@@ -518,7 +518,9 @@ int
 js_reference_ref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
   reference->count++;
 
-  if (reference->count == 1) JSValueProtect(env->context, reference->value);
+  if (JSValueIsObject(env->context, reference->value)) {
+    if (reference->count == 1) JSValueProtect(env->context, reference->value);
+  }
 
   if (result) {
     *result = reference->count;
@@ -531,6 +533,12 @@ int
 js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
   if (reference->count == 0) {
     js_throw_error(env, NULL, "Cannot decrease reference count");
+
+    return -1;
+  }
+
+  if (reference->count == 1 && !JSValueIsObject(env->context, reference->value)) {
+    js_throw_errorf(env, NULL, "Cannot make weak reference to non-object type");
 
     return -1;
   }
