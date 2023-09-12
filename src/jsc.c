@@ -17,6 +17,7 @@
 typedef struct js_callback_s js_callback_t;
 typedef struct js_finalizer_s js_finalizer_t;
 typedef struct js_finalizer_list_s js_finalizer_list_t;
+typedef struct js_delegate_s js_delegate_t;
 
 struct js_platform_s {
   js_platform_options_t options;
@@ -40,9 +41,11 @@ struct js_env_s {
     JSClassRef reference;
     JSClassRef wrap;
     JSClassRef finalizer;
+    JSClassRef type_tag;
     JSClassRef external;
     JSClassRef function;
     JSClassRef constructor;
+    JSClassRef delegate;
   } classes;
 };
 
@@ -60,13 +63,21 @@ struct js_deferred_s {
 struct js_finalizer_s {
   js_env_t *env;
   void *data;
-  js_finalize_cb cb;
-  void *hint;
+  js_finalize_cb finalize_cb;
+  void *finalize_hint;
 };
 
 struct js_finalizer_list_s {
   js_finalizer_t finalizer;
   js_finalizer_list_t *next;
+};
+
+struct js_delegate_s {
+  js_env_t *env;
+  js_delegate_callbacks_t callbacks;
+  void *data;
+  js_finalize_cb finalize_cb;
+  void *finalize_hint;
 };
 
 struct js_callback_s {
@@ -196,6 +207,9 @@ static void
 on_finalizer_finalize (JSObjectRef external);
 
 static void
+on_type_tag_finalize (JSObjectRef external);
+
+static void
 on_function_finalize (JSObjectRef external);
 
 static void
@@ -203,6 +217,24 @@ on_external_finalize (JSObjectRef external);
 
 static void
 on_constructor_finalize (JSObjectRef external);
+
+static JSValueRef
+on_delegate_get_property (JSContextRef context, JSObjectRef object, JSStringRef property, JSValueRef *exception);
+
+static bool
+on_delegate_has_property (JSContextRef context, JSObjectRef object, JSStringRef property);
+
+static bool
+on_delegate_set_property (JSContextRef context, JSObjectRef object, JSStringRef property, JSValueRef value, JSValueRef *exception);
+
+static bool
+on_delegate_delete_property (JSContextRef context, JSObjectRef object, JSStringRef property, JSValueRef *exception);
+
+static void
+on_delegate_get_property_names (JSContextRef context, JSObjectRef object, JSPropertyNameAccumulatorRef properties);
+
+static void
+on_delegate_finalize (JSObjectRef object);
 
 static inline int
 js_propagate_exception (js_env_t *env) {
@@ -250,6 +282,10 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
     .finalize = on_finalizer_finalize,
   });
 
+  env->classes.type_tag = JSClassCreate(&(JSClassDefinition){
+    .finalize = on_type_tag_finalize,
+  });
+
   env->classes.function = JSClassCreate(&(JSClassDefinition){
     .finalize = on_function_finalize,
   });
@@ -260,6 +296,15 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
   env->classes.constructor = JSClassCreate(&(JSClassDefinition){
     .finalize = on_constructor_finalize,
+  });
+
+  env->classes.delegate = JSClassCreate(&(JSClassDefinition){
+    .getProperty = on_delegate_get_property,
+    .hasProperty = on_delegate_has_property,
+    .setProperty = on_delegate_set_property,
+    .deleteProperty = on_delegate_delete_property,
+    .getPropertyNames = on_delegate_get_property_names,
+    .finalize = on_delegate_finalize,
   });
 
   js_value_t *fn;
@@ -279,6 +324,7 @@ js_destroy_env (js_env_t *env) {
   JSClassRelease(env->classes.finalizer);
   JSClassRelease(env->classes.function);
   JSClassRelease(env->classes.external);
+  JSClassRelease(env->classes.constructor);
 
   JSGlobalContextRelease(env->context);
   JSContextGroupRelease(env->group);
@@ -771,8 +817,8 @@ static void
 on_wrap_finalize (JSObjectRef external) {
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate(external);
 
-  if (finalizer->cb) {
-    finalizer->cb(finalizer->env, finalizer->data, finalizer->hint);
+  if (finalizer->finalize_cb) {
+    finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
   }
 
   free(finalizer);
@@ -784,8 +830,8 @@ js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_
 
   finalizer->env = env;
   finalizer->data = data;
-  finalizer->cb = finalize_cb;
-  finalizer->hint = finalize_hint;
+  finalizer->finalize_cb = finalize_cb;
+  finalizer->finalize_hint = finalize_hint;
 
   JSObjectRef external = JSObjectMake(env->context, env->classes.wrap, (void *) finalizer);
 
@@ -836,7 +882,7 @@ js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
 
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
 
-  finalizer->cb = NULL;
+  finalizer->finalize_cb = NULL;
 
   if (result) {
     *result = finalizer->data;
@@ -851,6 +897,154 @@ js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
   return 0;
 }
 
+static JSValueRef
+on_delegate_get_property (JSContextRef context, JSObjectRef object, JSStringRef property, JSValueRef *exception) {
+  js_delegate_t *delegate = (js_delegate_t *) JSObjectGetPrivate(object);
+
+  js_env_t *env = delegate->env;
+
+  if (delegate->callbacks.get) {
+    js_value_t *result = delegate->callbacks.get(
+      env,
+      (js_value_t *) JSValueMakeString(context, property),
+      delegate->data
+    );
+
+    if (env->exception) *exception = env->exception;
+
+    env->exception = NULL;
+
+    return (JSValueRef) result;
+  }
+
+  return NULL;
+}
+
+static bool
+on_delegate_has_property (JSContextRef context, JSObjectRef object, JSStringRef property) {
+  js_delegate_t *delegate = (js_delegate_t *) JSObjectGetPrivate(object);
+
+  js_env_t *env = delegate->env;
+
+  if (delegate->callbacks.has) {
+    return delegate->callbacks.has(
+      env,
+      (js_value_t *) JSValueMakeString(context, property),
+      delegate->data
+    );
+  }
+
+  return false;
+}
+
+static bool
+on_delegate_set_property (JSContextRef context, JSObjectRef object, JSStringRef property, JSValueRef value, JSValueRef *exception) {
+  js_delegate_t *delegate = (js_delegate_t *) JSObjectGetPrivate(object);
+
+  js_env_t *env = delegate->env;
+
+  if (delegate->callbacks.set) {
+    bool success = delegate->callbacks.set(
+      env,
+      (js_value_t *) JSValueMakeString(context, property),
+      (js_value_t *) value,
+      delegate->data
+    );
+
+    if (env->exception) *exception = env->exception;
+
+    env->exception = NULL;
+
+    return success;
+  }
+
+  return false;
+}
+
+static bool
+on_delegate_delete_property (JSContextRef context, JSObjectRef object, JSStringRef property, JSValueRef *exception) {
+  js_delegate_t *delegate = (js_delegate_t *) JSObjectGetPrivate(object);
+
+  js_env_t *env = delegate->env;
+
+  if (delegate->callbacks.delete_property) {
+    bool success = delegate->callbacks.delete_property(
+      env,
+      (js_value_t *) JSValueMakeString(context, property),
+      delegate->data
+    );
+
+    if (env->exception) *exception = env->exception;
+
+    env->exception = NULL;
+
+    return success;
+  }
+
+  return false;
+}
+
+static void
+on_delegate_get_property_names (JSContextRef context, JSObjectRef object, JSPropertyNameAccumulatorRef properties) {
+  js_delegate_t *delegate = (js_delegate_t *) JSObjectGetPrivate(object);
+
+  js_env_t *env = delegate->env;
+
+  if (delegate->callbacks.own_keys) {
+    js_value_t *result = delegate->callbacks.own_keys(
+      env,
+      delegate->data
+    );
+
+    int err;
+
+    uint32_t len;
+    err = js_get_array_length(env, result, &len);
+    assert(err == 0);
+
+    for (size_t i = 0; i < len; i++) {
+      js_value_t *name;
+      err = js_get_element(env, result, i, &name);
+      assert(err == 0);
+
+      JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) name, NULL);
+
+      JSPropertyNameAccumulatorAddName(properties, ref);
+
+      JSStringRelease(ref);
+    }
+  }
+}
+
+static void
+on_delegate_finalize (JSObjectRef object) {
+  js_delegate_t *delegate = (js_delegate_t *) JSObjectGetPrivate(object);
+
+  if (delegate->finalize_cb) {
+    delegate->finalize_cb(delegate->env, delegate->data, delegate->finalize_hint);
+  }
+
+  free(delegate);
+}
+
+int
+js_create_delegate (js_env_t *env, const js_delegate_callbacks_t *callbacks, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
+  js_delegate_t *delegate = malloc(sizeof(js_delegate_t));
+
+  delegate->env = env;
+  delegate->data = data;
+  delegate->finalize_cb = finalize_cb;
+  delegate->finalize_hint = finalize_hint;
+
+  memcpy(&delegate->callbacks, callbacks, sizeof(js_delegate_callbacks_t));
+
+  JSObjectRef object = JSObjectMake(env->context, env->classes.delegate, delegate);
+
+  *result = (js_value_t *) object;
+
+  return 0;
+}
+
 static void
 on_finalizer_finalize (JSObjectRef external) {
   js_finalizer_list_t *next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
@@ -860,8 +1054,8 @@ on_finalizer_finalize (JSObjectRef external) {
   while (next) {
     js_finalizer_t *finalizer = &next->finalizer;
 
-    if (finalizer->cb) {
-      finalizer->cb(finalizer->env, finalizer->data, finalizer->hint);
+    if (finalizer->finalize_cb) {
+      finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
     }
 
     prev = next;
@@ -879,8 +1073,8 @@ js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb 
 
   finalizer->env = env;
   finalizer->data = data;
-  finalizer->cb = finalize_cb;
-  finalizer->hint = finalize_hint;
+  finalizer->finalize_cb = finalize_cb;
+  finalizer->finalize_hint = finalize_hint;
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_finalizer");
 
@@ -914,6 +1108,71 @@ js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb 
   JSObjectSetPrivate(external, (void *) prev);
 
   if (result) js_create_reference(env, object, 0, result);
+
+  return 0;
+}
+
+static void
+on_type_tag_finalize (JSObjectRef external) {
+  js_type_tag_t *tag = (js_type_tag_t *) JSObjectGetPrivate(external);
+
+  free(tag);
+}
+
+int
+js_add_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
+  js_type_tag_t *existing = malloc(sizeof(js_type_tag_t));
+
+  existing->lower = tag->lower;
+  existing->upper = tag->upper;
+
+  JSObjectRef external = JSObjectMake(env->context, env->classes.type_tag, (void *) existing);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_type_tag");
+
+  if (JSObjectHasProperty(env->context, (JSObjectRef) object, ref)) {
+    JSStringRelease(ref);
+
+    js_throw_errorf(env, NULL, "Object is already type tagged");
+
+    free(existing);
+
+    return -1;
+  }
+
+  JSObjectSetProperty(
+    env->context,
+    (JSObjectRef) object,
+    ref,
+    external,
+    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+    &env->exception
+  );
+
+  JSStringRelease(ref);
+
+  if (env->exception) {
+    free(existing);
+
+    return js_propagate_exception(env);
+  }
+
+  return 0;
+}
+
+int
+js_check_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag, bool *result) {
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_type_tag");
+
+  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+
+  *result = false;
+
+  if (external) {
+    js_type_tag_t *existing = (js_type_tag_t *) JSObjectGetPrivate((JSObjectRef) external);
+
+    *result = existing->lower == tag->lower && existing->upper == tag->upper;
+  }
 
   return 0;
 }
@@ -1216,8 +1475,8 @@ static void
 on_external_finalize (JSObjectRef external) {
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate(external);
 
-  if (finalizer->cb) {
-    finalizer->cb(finalizer->env, finalizer->data, finalizer->hint);
+  if (finalizer->finalize_cb) {
+    finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
   }
 
   free(finalizer);
@@ -1229,8 +1488,8 @@ js_create_external (js_env_t *env, void *data, js_finalize_cb finalize_cb, void 
 
   finalizer->env = env;
   finalizer->data = data;
-  finalizer->cb = finalize_cb;
-  finalizer->hint = finalize_hint;
+  finalizer->finalize_cb = finalize_cb;
+  finalizer->finalize_hint = finalize_hint;
 
   JSObjectRef external = JSObjectMake(env->context, env->classes.external, (void *) finalizer);
 
@@ -1550,8 +1809,8 @@ static void
 on_external_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
   js_finalizer_t *finalizer = (js_finalizer_t *) deallocatorContext;
 
-  if (finalizer->cb) {
-    finalizer->cb(finalizer->env, finalizer->data, finalizer->hint);
+  if (finalizer->finalize_cb) {
+    finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
   }
 
   free(finalizer);
@@ -1563,8 +1822,8 @@ js_create_external_arraybuffer (js_env_t *env, void *data, size_t len, js_finali
 
   finalizer->env = env;
   finalizer->data = data;
-  finalizer->cb = finalize_cb;
-  finalizer->hint = finalize_hint;
+  finalizer->finalize_cb = finalize_cb;
+  finalizer->finalize_hint = finalize_hint;
 
   JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, data, len, on_external_arraybuffer_finalize, (void *) finalizer, &env->exception);
 
@@ -1877,6 +2136,24 @@ js_is_array (js_env_t *env, js_value_t *value, bool *result) {
 int
 js_is_external (js_env_t *env, js_value_t *value, bool *result) {
   *result = JSValueIsObjectOfClass(env->context, (JSValueRef) value, env->classes.external);
+
+  return 0;
+}
+
+int
+js_is_wrapped (js_env_t *env, js_value_t *value, bool *result) {
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
+
+  *result = JSValueIsObject(env->context, (JSValueRef) value) && JSObjectHasProperty(env->context, (JSObjectRef) value, ref);
+
+  JSStringRelease(ref);
+
+  return 0;
+}
+
+int
+js_is_delegate (js_env_t *env, js_value_t *value, bool *result) {
+  *result = JSValueIsObjectOfClass(env->context, (JSValueRef) value, env->classes.delegate);
 
   return 0;
 }
