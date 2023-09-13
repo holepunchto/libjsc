@@ -222,9 +222,6 @@ static JSValueRef
 on_delegate_get_property (JSContextRef context, JSObjectRef object, JSStringRef property, JSValueRef *exception);
 
 static bool
-on_delegate_has_property (JSContextRef context, JSObjectRef object, JSStringRef property);
-
-static bool
 on_delegate_set_property (JSContextRef context, JSObjectRef object, JSStringRef property, JSValueRef value, JSValueRef *exception);
 
 static bool
@@ -300,7 +297,6 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
   env->classes.delegate = JSClassCreate(&(JSClassDefinition){
     .getProperty = on_delegate_get_property,
-    .hasProperty = on_delegate_has_property,
     .setProperty = on_delegate_set_property,
     .deleteProperty = on_delegate_delete_property,
     .getPropertyNames = on_delegate_get_property_names,
@@ -903,6 +899,16 @@ on_delegate_get_property (JSContextRef context, JSObjectRef object, JSStringRef 
 
   js_env_t *env = delegate->env;
 
+  if (delegate->callbacks.has) {
+    bool exists = delegate->callbacks.has(
+      env,
+      (js_value_t *) JSValueMakeString(context, property),
+      delegate->data
+    );
+
+    if (!exists) return NULL;
+  }
+
   if (delegate->callbacks.get) {
     js_value_t *result = delegate->callbacks.get(
       env,
@@ -918,23 +924,6 @@ on_delegate_get_property (JSContextRef context, JSObjectRef object, JSStringRef 
   }
 
   return NULL;
-}
-
-static bool
-on_delegate_has_property (JSContextRef context, JSObjectRef object, JSStringRef property) {
-  js_delegate_t *delegate = (js_delegate_t *) JSObjectGetPrivate(object);
-
-  js_env_t *env = delegate->env;
-
-  if (delegate->callbacks.has) {
-    return delegate->callbacks.has(
-      env,
-      (js_value_t *) JSValueMakeString(context, property),
-      delegate->data
-    );
-  }
-
-  return false;
 }
 
 static bool
