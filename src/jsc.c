@@ -1910,6 +1910,7 @@ js_release_arraybuffer_backing_store (js_env_t *env, js_arraybuffer_backing_stor
 
   return 0;
 }
+
 int
 js_set_arraybuffer_zero_fill_enabled (bool enabled) {
   return 0;
@@ -2471,6 +2472,38 @@ js_get_prototype (js_env_t *env, js_value_t *object, js_value_t **result) {
   *result = (js_value_t *) JSObjectGetPrototype(env->context, (JSObjectRef) object);
 
   return 0;
+}
+
+int
+js_get_property_names (js_env_t *env, js_value_t *object, js_value_t **result) {
+  JSPropertyNameArrayRef properties = JSObjectCopyPropertyNames(env->context, (JSObjectRef) object);
+
+  size_t len = JSPropertyNameArrayGetCount(properties);
+
+  JSValueRef argv[1] = {JSValueMakeNumber(env->context, (double) len)};
+
+  JSObjectRef array = JSObjectMakeArray(env->context, 1, argv, &env->exception);
+
+  if (env->exception) goto err;
+
+  for (size_t i = 0; i < len; i++) {
+    JSStringRef name = JSPropertyNameArrayGetNameAtIndex(properties, i);
+
+    JSObjectSetPropertyAtIndex(env->context, array, i, JSValueMakeString(env->context, name), &env->exception);
+
+    if (env->exception) goto err;
+  }
+
+  JSPropertyNameArrayRelease(properties);
+
+  *result = (js_value_t *) array;
+
+  return 0;
+
+err:
+  JSPropertyNameArrayRelease(properties);
+
+  return js_propagate_exception(env);
 }
 
 int
