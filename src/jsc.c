@@ -981,10 +981,7 @@ on_delegate_get_property_names (JSContextRef context, JSObjectRef object, JSProp
   js_env_t *env = delegate->env;
 
   if (delegate->callbacks.own_keys) {
-    js_value_t *result = delegate->callbacks.own_keys(
-      env,
-      delegate->data
-    );
+    js_value_t *result = delegate->callbacks.own_keys(env, delegate->data);
 
     int err;
 
