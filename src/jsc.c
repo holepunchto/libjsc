@@ -318,6 +318,7 @@ js_destroy_env (js_env_t *env) {
   JSClassRelease(env->classes.reference);
   JSClassRelease(env->classes.wrap);
   JSClassRelease(env->classes.finalizer);
+  JSClassRelease(env->classes.type_tag);
   JSClassRelease(env->classes.function);
   JSClassRelease(env->classes.external);
   JSClassRelease(env->classes.constructor);
