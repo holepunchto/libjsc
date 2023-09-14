@@ -2013,6 +2013,52 @@ js_create_dataview (js_env_t *env, size_t len, js_value_t *arraybuffer, size_t o
   return 0;
 }
 
+int
+js_coerce_to_boolean (js_env_t *env, js_value_t *value, js_value_t **result) {
+  JSValueRef boolean = JSValueMakeBoolean(env->context, JSValueToBoolean(env->context, (JSValueRef) value));
+
+  *result = (js_value_t *) boolean;
+
+  return 0;
+}
+
+int
+js_coerce_to_number (js_env_t *env, js_value_t *value, js_value_t **result) {
+  JSValueRef number = JSValueMakeNumber(env->context, JSValueToNumber(env->context, (JSValueRef) value, &env->exception));
+
+  if (env->exception) return js_propagate_exception(env);
+
+  *result = (js_value_t *) number;
+
+  return 0;
+}
+
+int
+js_coerce_to_string (js_env_t *env, js_value_t *value, js_value_t **result) {
+  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return js_propagate_exception(env);
+
+  JSValueRef string = JSValueMakeString(env->context, ref);
+
+  JSStringRelease(ref);
+
+  *result = (js_value_t *) string;
+
+  return 0;
+}
+
+int
+js_coerce_to_object (js_env_t *env, js_value_t *value, js_value_t **result) {
+  JSObjectRef object = JSValueToObject(env->context, (JSValueRef) value, &env->exception);
+
+  if (env->exception) return js_propagate_exception(env);
+
+  *result = (js_value_t *) object;
+
+  return 0;
+}
+
 // https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_typeof (js_env_t *env, js_value_t *value, js_value_type_t *result) {
