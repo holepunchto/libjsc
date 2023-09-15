@@ -3291,8 +3291,6 @@ js_request_garbage_collection (js_env_t *env) {
     return -1;
   }
 
-  JSSynchronousEdenCollectForDebugging(env->context);
-
   JSSynchronousGarbageCollectForDebugging(env->context);
 
   return 0;

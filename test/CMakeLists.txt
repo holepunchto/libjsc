@@ -114,34 +114,53 @@ list(APPEND tests
 )
 
 list(APPEND skipped_tests
+  # Not supported
   atomics-wait-timeout
   atomics-wait-timeout-notify
+
+  # Not supported
   create-function-with-ffi
   create-function-with-ffi-arraybuffer
   create-function-with-ffi-pointer
   create-function-with-ffi-receiver
   create-function-with-ffi-string
   create-function-with-ffi-uint8array
+
+  # https://bugs.webkit.org/show_bug.cgi?id=261600
   create-module-import-missing
+
+  # https://bugs.webkit.org/show_bug.cgi?id=250554
   create-promise-reject
   create-promise-resolve
+
+  # https://bugs.webkit.org/show_bug.cgi?id=250511
   create-reference-bigint
-  create-reference-object-weak
+
+  # https://bugs.webkit.org/show_bug.cgi?id=257709
   create-sharedarraybuffer
   create-sharedarraybuffer-with-backing-store
+
+  # https://bugs.webkit.org/show_bug.cgi?id=261600
   dynamic-import
   dynamic-import-without-handler
+
+  # https://bugs.webkit.org/show_bug.cgi?id=261600
   import-meta
   import-meta-throw
+
+  # https://bugs.webkit.org/show_bug.cgi?id=261600
   run-module
   run-module-async
   run-module-cyclic-import
   run-module-nested-import
   run-module-double-nested-import
   run-module-throw
+
+  # https://bugs.webkit.org/show_bug.cgi?id=250511
   typeof-bigint
+
+  # https://bugs.webkit.org/show_bug.cgi?id=250554
   wasm-async
-  wrap-with-reference
 )
 
 foreach(test IN LISTS tests)
