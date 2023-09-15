@@ -15,6 +15,9 @@ list(APPEND tests
   create-arraybuffer-with-backing-store
   create-delegate
   create-delegate-get-without-has
+  create-delegate-get-throw
+  create-delegate-has-throw
+  create-delegate-set-throw
   create-external
   create-external-with-finalizer
   create-external-arraybuffer
@@ -64,6 +67,7 @@ list(APPEND tests
   get-dataview-info
   get-platform-identifier
   get-platform-version
+  get-property-missing
   get-typedarray-info-uint8array
   get-typedarray-info-uint8array-with-offset
   get-typedarray-info-uint16array
@@ -108,11 +112,8 @@ list(APPEND tests
 )
 
 list(APPEND skipped_tests
-  add-finalizer
   atomics-wait-timeout
   atomics-wait-timeout-notify
-  create-external-with-finalizer
-  create-external-arraybuffer-with-finalizer
   create-function-with-ffi
   create-function-with-ffi-arraybuffer
   create-function-with-ffi-pointer
@@ -138,7 +139,6 @@ list(APPEND skipped_tests
   run-module-throw
   typeof-bigint
   wasm-async
-  wrap-with-finalizer
   wrap-with-reference
 )
 

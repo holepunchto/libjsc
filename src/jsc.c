@@ -907,6 +907,10 @@ on_delegate_get_property (JSContextRef context, JSObjectRef object, JSStringRef 
       delegate->data
     );
 
+    if (env->exception) *exception = env->exception;
+
+    env->exception = NULL;
+
     if (!exists) return NULL;
   }
 
@@ -2610,9 +2614,11 @@ int
 js_has_named_property (js_env_t *env, js_value_t *object, const char *name, bool *result) {
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
-  *result = JSObjectHasProperty(env->context, (JSObjectRef) object, ref);
+  *result = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, JSValueMakeString(env->context, ref), &env->exception);
 
   JSStringRelease(ref);
+
+  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
