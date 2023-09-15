@@ -983,6 +983,8 @@ on_delegate_get_property_names (JSContextRef context, JSObjectRef object, JSProp
   if (delegate->callbacks.own_keys) {
     js_value_t *result = delegate->callbacks.own_keys(env, delegate->data);
 
+    if (env->exception) return;
+
     int err;
 
     uint32_t len;
@@ -2507,7 +2509,13 @@ js_get_prototype (js_env_t *env, js_value_t *object, js_value_t **result) {
 
 int
 js_get_property_names (js_env_t *env, js_value_t *object, js_value_t **result) {
+  env->depth++;
+
   JSPropertyNameArrayRef properties = JSObjectCopyPropertyNames(env->context, (JSObjectRef) object);
+
+  env->depth--;
+
+  if (env->exception) return js_propagate_exception(env);
 
   size_t len = JSPropertyNameArrayGetCount(properties);
 
