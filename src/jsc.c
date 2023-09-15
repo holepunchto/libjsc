@@ -416,9 +416,7 @@ js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) {
-    *result = (js_value_t *) value;
-  }
+  if (result) *result = (js_value_t *) value;
 
   return 0;
 }
@@ -881,9 +879,7 @@ js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
 
   finalizer->finalize_cb = NULL;
 
-  if (result) {
-    *result = finalizer->data;
-  }
+  if (result) *result = finalizer->data;
 
   JSObjectDeleteProperty(env->context, (JSObjectRef) object, ref, &env->exception);
 
@@ -2430,16 +2426,10 @@ js_get_value_string_utf8 (js_env_t *env, js_value_t *value, utf8_t *str, size_t 
   } else if (len != 0) {
     size_t written = utf16le_convert_to_utf8(utf16, utf16_len, str);
 
-    if (written < len) {
-      str[written] = '\0';
-    }
+    if (written < len) str[written] = '\0';
 
-    if (result) {
-      *result = written;
-    }
-  } else if (result) {
-    *result = 0;
-  }
+    if (result) *result = written;
+  } else if (result) *result = 0;
 
   JSStringRelease(ref);
 
@@ -2463,16 +2453,10 @@ js_get_value_string_utf16le (js_env_t *env, js_value_t *value, utf16_t *str, siz
 
     memcpy(str, utf16, written * sizeof(utf16_t));
 
-    if (written < len) {
-      str[written] = L'\0';
-    }
+    if (written < len) str[written] = L'\0';
 
-    if (result) {
-      *result = written;
-    }
-  } else if (result) {
-    *result = 0;
-  }
+    if (result) *result = written;
+  } else if (result) *result = 0;
 
   JSStringRelease(ref);
 
@@ -2555,27 +2539,41 @@ err:
 
 int
 js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t **result) {
+  env->depth++;
+
   JSValueRef value = JSObjectGetPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
+
+  env->depth--;
 
   if (env->exception) return js_propagate_exception(env);
 
-  *result = (js_value_t *) value;
+  if (result) *result = (js_value_t *) value;
 
   return 0;
 }
 
 int
 js_has_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
-  *result = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
+  env->depth++;
+
+  bool value = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
+
+  env->depth--;
 
   if (env->exception) return js_propagate_exception(env);
+
+  if (result) *result = value;
 
   return 0;
 }
 
 int
 js_set_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *value) {
+  env->depth++;
+
   JSObjectSetPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, (JSValueRef) value, kJSPropertyAttributeNone, &env->exception);
+
+  env->depth--;
 
   if (env->exception) return js_propagate_exception(env);
 
@@ -2584,13 +2582,15 @@ js_set_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t 
 
 int
 js_delete_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
+  env->depth++;
+
   bool value = JSObjectDeletePropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
+
+  env->depth--;
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) {
-    *result = value;
-  }
+  if (result) *result = value;
 
   return 0;
 }
@@ -2599,13 +2599,17 @@ int
 js_get_named_property (js_env_t *env, js_value_t *object, const char *name, js_value_t **result) {
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
+  env->depth++;
+
   JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
+
+  env->depth--;
 
   JSStringRelease(ref);
 
   if (env->exception) return js_propagate_exception(env);
 
-  *result = (js_value_t *) value;
+  if (result) *result = (js_value_t *) value;
 
   return 0;
 }
@@ -2614,11 +2618,17 @@ int
 js_has_named_property (js_env_t *env, js_value_t *object, const char *name, bool *result) {
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
-  *result = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, JSValueMakeString(env->context, ref), &env->exception);
+  env->depth++;
+
+  bool value = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, JSValueMakeString(env->context, ref), &env->exception);
+
+  env->depth--;
 
   JSStringRelease(ref);
 
   if (env->exception) return js_propagate_exception(env);
+
+  if (result) *result = value;
 
   return 0;
 }
@@ -2627,7 +2637,11 @@ int
 js_set_named_property (js_env_t *env, js_value_t *object, const char *name, js_value_t *value) {
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
+  env->depth++;
+
   JSObjectSetProperty(env->context, (JSObjectRef) object, ref, (JSValueRef) value, kJSPropertyAttributeNone, &env->exception);
+
+  env->depth--;
 
   JSStringRelease(ref);
 
@@ -2640,22 +2654,28 @@ int
 js_delete_named_property (js_env_t *env, js_value_t *object, const char *name, bool *result) {
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
+  env->depth++;
+
   bool value = JSObjectDeleteProperty(env->context, (JSObjectRef) object, ref, &env->exception);
+
+  env->depth--;
 
   JSStringRelease(ref);
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) {
-    *result = value;
-  }
+  if (result) *result = value;
 
   return 0;
 }
 
 int
 js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **result) {
+  env->depth++;
+
   JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) object, index, &env->exception);
+
+  env->depth--;
 
   if (env->exception) return js_propagate_exception(env);
 
@@ -2666,18 +2686,28 @@ js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **
 
 int
 js_has_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result) {
-  JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) object, index, &env->exception);
+  JSValueRef key = JSValueMakeNumber(env->context, (double) index);
+
+  env->depth++;
+
+  bool value = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, key, &env->exception);
+
+  env->depth--;
 
   if (env->exception) return js_propagate_exception(env);
 
-  *result = !JSValueIsUndefined(env->context, value);
+  if (result) *result = value;
 
   return 0;
 }
 
 int
 js_set_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t *value) {
+  env->depth++;
+
   JSObjectSetPropertyAtIndex(env->context, (JSObjectRef) object, index, (JSValueRef) value, &env->exception);
+
+  env->depth--;
 
   if (env->exception) return js_propagate_exception(env);
 
@@ -2688,13 +2718,15 @@ int
 js_delete_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result) {
   JSValueRef key = JSValueMakeNumber(env->context, (double) index);
 
+  env->depth++;
+
   bool value = JSObjectDeletePropertyForKey(env->context, (JSObjectRef) object, key, &env->exception);
+
+  env->depth--;
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) {
-    *result = value;
-  }
+  if (result) *result = value;
 
   return 0;
 }
@@ -2890,9 +2922,7 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) {
-    *result = (js_value_t *) value;
-  }
+  if (result) *result = (js_value_t *) value;
 
   return 0;
 }
@@ -2907,9 +2937,7 @@ js_call_function_with_checkpoint (js_env_t *env, js_value_t *receiver, js_value_
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) {
-    *result = (js_value_t *) value;
-  }
+  if (result) *result = (js_value_t *) value;
 
   return 0;
 }
@@ -2924,9 +2952,7 @@ js_new_instance (js_env_t *env, js_value_t *constructor, size_t argc, js_value_t
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) {
-    *result = (js_value_t *) value;
-  }
+  if (result) *result = (js_value_t *) value;
 
   return 0;
 }
@@ -3244,9 +3270,7 @@ js_adjust_external_memory (js_env_t *env, int64_t change_in_bytes, int64_t *resu
     JSReportExtraMemoryCost(env->context, change_in_bytes);
   }
 
-  if (result) {
-    *result = env->external_memory;
-  }
+  if (result) *result = env->external_memory;
 
   return 0;
 }
