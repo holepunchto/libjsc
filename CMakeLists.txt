@@ -48,6 +48,13 @@ target_include_directories(
     $<TARGET_PROPERTY:utf,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
+target_link_libraries(
+  jsc
+  PUBLIC
+    "-framework CoreFoundation"
+    "-framework JavaScriptCore"
+)
+
 add_library(jsc_shared SHARED $<TARGET_OBJECTS:jsc>)
 
 set_target_properties(
@@ -61,8 +68,7 @@ target_link_libraries(
   PUBLIC
     uv
     utf_shared
-    "-framework CoreFoundation"
-    "-framework JavaScriptCore"
+    $<TARGET_PROPERTY:jsc,INTERFACE_LINK_LIBRARIES>
 )
 
 add_library(jsc_static STATIC $<TARGET_OBJECTS:jsc>)
@@ -79,8 +85,7 @@ target_link_libraries(
   PUBLIC
     uv_a
     utf_static
-    "-framework CoreFoundation"
-    "-framework JavaScriptCore"
+    $<TARGET_PROPERTY:jsc,INTERFACE_LINK_LIBRARIES>
 )
 
 install(TARGETS jsc_shared jsc_static)
