@@ -66,9 +66,9 @@ set_target_properties(
 target_link_libraries(
   jsc_shared
   PUBLIC
+    jsc
     uv
     utf_shared
-    $<TARGET_PROPERTY:jsc,INTERFACE_LINK_LIBRARIES>
 )
 
 add_library(jsc_static STATIC $<TARGET_OBJECTS:jsc>)
@@ -83,9 +83,9 @@ set_target_properties(
 target_link_libraries(
   jsc_static
   PUBLIC
+    jsc
     uv_a
     utf_static
-    $<TARGET_PROPERTY:jsc,INTERFACE_LINK_LIBRARIES>
 )
 
 install(TARGETS jsc_shared jsc_static)
