@@ -26,12 +26,18 @@ struct js_platform_s {
 
 struct js_env_s {
   uv_loop_t *loop;
+
   js_platform_t *platform;
+
   uint32_t depth;
+
   JSContextGroupRef group;
   JSGlobalContextRef context;
+
   JSValueRef exception;
+
   int64_t external_memory;
+
   js_uncaught_exception_cb on_uncaught_exception;
   void *uncaught_exception_data;
   js_unhandled_rejection_cb on_unhandled_rejection;
@@ -248,6 +254,8 @@ js_propagate_exception (js_env_t *env) {
 
 int
 js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *options, js_env_t **result) {
+  int err;
+
   JSContextGroupRef group = JSContextGroupCreate();
 
   JSGlobalContextRef context = JSGlobalContextCreateInGroup(group, NULL);
@@ -255,15 +263,21 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
   js_env_t *env = malloc(sizeof(js_env_t));
 
   env->loop = loop;
+
   env->platform = platform;
+
   env->depth = 0;
+
   env->group = group;
   env->context = context;
+
   env->exception = NULL;
+
   env->external_memory = 0;
 
   env->on_uncaught_exception = NULL;
   env->uncaught_exception_data = NULL;
+
   env->on_unhandled_rejection = NULL;
   env->unhandled_rejection_data = NULL;
 
@@ -304,9 +318,12 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
   });
 
   js_value_t *fn;
-  js_create_function(env, "onunhandledrejection", -1, on_unhandled_rejection, NULL, &fn);
+  err = js_create_function(env, "onunhandledrejection", -1, on_unhandled_rejection, NULL, &fn);
+  assert(err == 0);
 
-  JSGlobalContextSetUnhandledRejectionCallback(context, (JSObjectRef) fn, NULL);
+  JSGlobalContextSetUnhandledRejectionCallback(context, (JSObjectRef) fn, &env->exception);
+
+  assert(env->exception == NULL);
 
   *result = env;
 
@@ -401,11 +418,11 @@ js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value
 
   if (env->exception) return js_propagate_exception(env);
 
-  env->depth++;
-
   if (file == NULL) file = "";
 
   JSStringRef url = JSStringCreateWithUTF8CString(file);
+
+  env->depth++;
 
   JSValueRef value = JSEvaluateScript(env->context, ref, NULL, url, offset + 1, &env->exception);
 
@@ -843,13 +860,9 @@ js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_
 
   JSStringRelease(ref);
 
-  if (env->exception) {
-    free(finalizer);
+  if (env->exception) return js_propagate_exception(env);
 
-    return js_propagate_exception(env);
-  }
-
-  if (result) js_create_reference(env, object, 0, result);
+  if (result) return js_create_reference(env, object, 0, result);
 
   return 0;
 }
@@ -1086,17 +1099,13 @@ js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb 
 
   JSStringRelease(ref);
 
-  if (env->exception) {
-    free(finalizer);
-
-    return js_propagate_exception(env);
-  }
+  if (env->exception) return js_propagate_exception(env);
 
   prev->next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
 
   JSObjectSetPrivate(external, (void *) prev);
 
-  if (result) js_create_reference(env, object, 0, result);
+  if (result) return js_create_reference(env, object, 0, result);
 
   return 0;
 }
