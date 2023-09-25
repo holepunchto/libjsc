@@ -116,6 +116,45 @@ static uv_once_t js_platform_version_guard = UV_ONCE_INIT;
 
 int
 js_create_platform (uv_loop_t *loop, const js_platform_options_t *options, js_platform_t **result) {
+  int err;
+
+  if (options) {
+    if (options->trace_garbage_collection) {
+      err = uv_os_setenv("JSC_logGC", "1");
+      assert(err == 0);
+    }
+
+    if (options->disable_optimizing_compiler) {
+      err = uv_os_setenv("JSC_useJIT", "false");
+      assert(err == 0);
+    } else {
+      if (options->trace_optimizations) {
+        err = uv_os_setenv("JSC_logJIT", "true");
+        assert(err == 0);
+      }
+    }
+
+    if (options->enable_sampling_profiler) {
+      err = uv_os_setenv("JSC_useSamplingProfiler", "true");
+      assert(err == 0);
+
+      err = uv_os_setenv("JSC_samplingProfilerPath", ".");
+      assert(err == 0);
+
+      err = uv_os_setenv("JSC_collectExtraSamplingProfilerData", "true");
+      assert(err == 0);
+
+      if (options->sampling_profiler_interval > 0) {
+        char interval[16];
+        err = snprintf(interval, 16, "%d", options->sampling_profiler_interval);
+        assert(err >= 0);
+
+        err = uv_os_setenv("JSC_sampleInterval", interval);
+        assert(err == 0);
+      }
+    }
+  }
+
   js_platform_t *platform = malloc(sizeof(js_platform_t));
 
   platform->loop = loop;
