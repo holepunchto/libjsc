@@ -39,10 +39,13 @@ struct js_env_s {
 
   int64_t external_memory;
 
-  js_uncaught_exception_cb on_uncaught_exception;
-  void *uncaught_exception_data;
-  js_unhandled_rejection_cb on_unhandled_rejection;
-  void *unhandled_rejection_data;
+  struct {
+    js_uncaught_exception_cb uncaught_exception;
+    void *uncaught_exception_data;
+
+    js_unhandled_rejection_cb unhandled_rejection;
+    void *unhandled_rejection_data;
+  } callbacks;
 
   struct {
     JSClassRef reference;
@@ -236,12 +239,12 @@ static void
 on_uncaught_exception (js_env_t *env, js_value_t *error) {
   int err;
 
-  if (env->on_uncaught_exception) {
+  if (env->callbacks.uncaught_exception) {
     js_handle_scope_t *scope;
     err = js_open_handle_scope(env, &scope);
     assert(err == 0);
 
-    env->on_uncaught_exception(env, error, env->uncaught_exception_data);
+    env->callbacks.uncaught_exception(env, error, env->callbacks.uncaught_exception_data);
 
     err = js_close_handle_scope(env, scope);
     assert(err == 0);
@@ -254,7 +257,7 @@ static js_value_t *
 on_unhandled_rejection (js_env_t *env, js_callback_info_t *info) {
   int err;
 
-  if (env->on_unhandled_rejection) {
+  if (env->callbacks.unhandled_rejection) {
     size_t argc = 2;
     js_value_t *argv[2];
 
@@ -264,7 +267,7 @@ on_unhandled_rejection (js_env_t *env, js_callback_info_t *info) {
     err = js_open_handle_scope(env, &scope);
     assert(err == 0);
 
-    env->on_unhandled_rejection(env, argv[1], argv[0], env->unhandled_rejection_data);
+    env->callbacks.unhandled_rejection(env, argv[1], argv[0], env->callbacks.unhandled_rejection_data);
 
     err = js_close_handle_scope(env, scope);
     assert(err == 0);
@@ -345,11 +348,11 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
   env->external_memory = 0;
 
-  env->on_uncaught_exception = NULL;
-  env->uncaught_exception_data = NULL;
+  env->callbacks.uncaught_exception = NULL;
+  env->callbacks.uncaught_exception_data = NULL;
 
-  env->on_unhandled_rejection = NULL;
-  env->unhandled_rejection_data = NULL;
+  env->callbacks.unhandled_rejection = NULL;
+  env->callbacks.unhandled_rejection_data = NULL;
 
   env->classes.reference = JSClassCreate(&(JSClassDefinition){
     .finalize = on_reference_finalize,
@@ -428,16 +431,16 @@ js_destroy_env (js_env_t *env) {
 
 int
 js_on_uncaught_exception (js_env_t *env, js_uncaught_exception_cb cb, void *data) {
-  env->on_uncaught_exception = cb;
-  env->uncaught_exception_data = data;
+  env->callbacks.uncaught_exception = cb;
+  env->callbacks.uncaught_exception_data = data;
 
   return 0;
 }
 
 int
 js_on_unhandled_rejection (js_env_t *env, js_unhandled_rejection_cb cb, void *data) {
-  env->on_unhandled_rejection = cb;
-  env->unhandled_rejection_data = data;
+  env->callbacks.unhandled_rejection = cb;
+  env->callbacks.unhandled_rejection_data = data;
 
   return 0;
 }
