@@ -28,6 +28,7 @@ struct js_env_s {
   uv_loop_t *loop;
 
   js_platform_t *platform;
+  js_handle_scope_t *scope;
 
   uint32_t depth;
 
@@ -53,6 +54,18 @@ struct js_env_s {
     JSClassRef constructor;
     JSClassRef delegate;
   } classes;
+};
+
+struct js_handle_scope_s {
+  js_handle_scope_t *parent;
+  JSValueRef *values;
+  size_t len;
+  size_t capacity;
+};
+
+struct js_escapable_handle_scope_s {
+  js_handle_scope_t *scope;
+  bool escaped;
 };
 
 struct js_ref_s {
@@ -120,7 +133,7 @@ js_create_platform (uv_loop_t *loop, const js_platform_options_t *options, js_pl
 
   if (options) {
     if (options->trace_garbage_collection) {
-      err = uv_os_setenv("JSC_logGC", "1");
+      err = uv_os_setenv("JSC_logGC", "true");
       assert(err == 0);
     }
 
@@ -221,8 +234,17 @@ js_get_platform_loop (js_platform_t *platform, uv_loop_t **result) {
 
 static void
 on_uncaught_exception (js_env_t *env, js_value_t *error) {
+  int err;
+
   if (env->on_uncaught_exception) {
+    js_handle_scope_t *scope;
+    err = js_open_handle_scope(env, &scope);
+    assert(err == 0);
+
     env->on_uncaught_exception(env, error, env->uncaught_exception_data);
+
+    err = js_close_handle_scope(env, scope);
+    assert(err == 0);
   } else {
     env->exception = (JSValueRef) error;
   }
@@ -230,13 +252,22 @@ on_uncaught_exception (js_env_t *env, js_value_t *error) {
 
 static js_value_t *
 on_unhandled_rejection (js_env_t *env, js_callback_info_t *info) {
+  int err;
+
   if (env->on_unhandled_rejection) {
     size_t argc = 2;
     js_value_t *argv[2];
 
     js_get_callback_info(env, info, &argc, argv, NULL, NULL);
 
+    js_handle_scope_t *scope;
+    err = js_open_handle_scope(env, &scope);
+    assert(err == 0);
+
     env->on_unhandled_rejection(env, argv[1], argv[0], env->unhandled_rejection_data);
+
+    err = js_close_handle_scope(env, scope);
+    assert(err == 0);
   }
 
   return NULL;
@@ -356,6 +387,9 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
     .finalize = on_delegate_finalize,
   });
 
+  err = js_open_handle_scope(env, &env->scope);
+  assert(err == 0);
+
   js_value_t *fn;
   err = js_create_function(env, "onunhandledrejection", -1, on_unhandled_rejection, NULL, &fn);
   assert(err == 0);
@@ -371,6 +405,11 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
 int
 js_destroy_env (js_env_t *env) {
+  int err;
+
+  err = js_open_handle_scope(env, &env->scope);
+  assert(err == 0);
+
   JSClassRelease(env->classes.reference);
   JSClassRelease(env->classes.wrap);
   JSClassRelease(env->classes.finalizer);
@@ -424,30 +463,81 @@ js_get_env_platform (js_env_t *env, js_platform_t **result) {
 
 int
 js_open_handle_scope (js_env_t *env, js_handle_scope_t **result) {
-  *result = NULL;
+  js_handle_scope_t *scope = malloc(sizeof(js_handle_scope_t));
+
+  scope->parent = env->scope;
+  scope->values = NULL;
+  scope->len = 0;
+  scope->capacity = 0;
+
+  env->scope = scope;
+
+  *result = scope;
 
   return 0;
 }
 
 int
 js_close_handle_scope (js_env_t *env, js_handle_scope_t *scope) {
+  for (size_t i = 0; i < scope->len; i++) {
+    JSValueUnprotect(env->context, scope->values[i]);
+  }
+
+  env->scope = scope->parent;
+
+  if (scope->values) free(scope->values);
+
+  free(scope);
+
   return 0;
 }
 
 int
 js_open_escapable_handle_scope (js_env_t *env, js_escapable_handle_scope_t **result) {
-  *result = NULL;
+  js_escapable_handle_scope_t *scope = malloc(sizeof(js_escapable_handle_scope_t));
 
-  return 0;
+  scope->escaped = false;
+
+  return js_open_handle_scope(env, &scope->scope);
 }
 
 int
 js_close_escapable_handle_scope (js_env_t *env, js_escapable_handle_scope_t *scope) {
-  return 0;
+  int err = js_close_handle_scope(env, scope->scope);
+
+  free(scope);
+
+  return err;
+}
+
+static void
+js_attach_to_handle_scope (js_env_t *env, js_handle_scope_t *scope, JSValueRef value) {
+  if (scope->len >= scope->capacity) {
+    if (scope->capacity) scope->capacity *= 2;
+    else scope->capacity = 4;
+
+    scope->values = realloc(scope->values, scope->capacity * sizeof(JSValueRef));
+  }
+
+  JSValueProtect(env->context, value);
+
+  scope->values[scope->len++] = value;
 }
 
 int
 js_escape_handle (js_env_t *env, js_escapable_handle_scope_t *scope, js_value_t *escapee, js_value_t **result) {
+  if (scope->escaped) {
+    js_throw_error(env, NULL, "Scope has already been escaped");
+
+    return -1;
+  }
+
+  scope->escaped = true;
+
+  *result = escapee;
+
+  js_attach_to_handle_scope(env, scope->scope->parent, (JSValueRef) escapee);
+
   return 0;
 }
 
@@ -472,11 +562,16 @@ js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) *result = (js_value_t *) value;
+  if (result) {
+    *result = (js_value_t *) value;
+
+    js_attach_to_handle_scope(env, env->scope, value);
+  }
 
   return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_create_module (js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_meta_cb cb, void *data, js_module_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -484,6 +579,7 @@ js_create_module (js_env_t *env, const char *name, size_t len, int offset, js_va
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_create_synthetic_module (js_env_t *env, const char *name, size_t len, js_value_t *const export_names[], size_t names_len, js_module_evaluate_cb cb, void *data, js_module_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -491,6 +587,7 @@ js_create_synthetic_module (js_env_t *env, const char *name, size_t len, js_valu
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_delete_module (js_env_t *env, js_module_t *module) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -498,6 +595,7 @@ js_delete_module (js_env_t *env, js_module_t *module) {
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_get_module_name (js_env_t *env, js_module_t *module, const char **result) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -505,6 +603,7 @@ js_get_module_name (js_env_t *env, js_module_t *module, const char **result) {
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_get_module_namespace (js_env_t *env, js_module_t *module, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -512,6 +611,7 @@ js_get_module_namespace (js_env_t *env, js_module_t *module, js_value_t **result
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_set_module_export (js_env_t *env, js_module_t *module, js_value_t *name, js_value_t *value) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -519,6 +619,7 @@ js_set_module_export (js_env_t *env, js_module_t *module, js_value_t *name, js_v
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_instantiate_module (js_env_t *env, js_module_t *module, js_module_resolve_cb cb, void *data) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -526,6 +627,7 @@ js_instantiate_module (js_env_t *env, js_module_t *module, js_module_resolve_cb 
   return -1;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_run_module (js_env_t *env, js_module_t *module, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
@@ -651,7 +753,12 @@ js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
 
 int
 js_get_reference_value (js_env_t *env, js_ref_t *reference, js_value_t **result) {
-  *result = (js_value_t *) reference->value;
+  if (reference->value == NULL) *result = NULL;
+  else {
+    *result = (js_value_t *) reference->value;
+
+    js_attach_to_handle_scope(env, env->scope, reference->value);
+  }
 
   return 0;
 }
@@ -665,6 +772,8 @@ on_constructor_finalize (JSObjectRef external) {
 
 static JSObjectRef
 on_constructor_call (JSContextRef context, JSObjectRef new_target, size_t argc, const JSValueRef argv[], JSValueRef *exception) {
+  int err;
+
   JSObjectRef receiver = JSObjectMake(context, NULL, NULL);
 
   JSObjectSetPrototype(context, receiver, JSObjectGetPrototype(context, new_target));
@@ -687,7 +796,14 @@ on_constructor_call (JSContextRef context, JSObjectRef new_target, size_t argc, 
     .new_target = new_target,
   };
 
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
+  assert(err == 0);
+
   js_value_t *result = callback->cb(env, &callback_info);
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
 
   JSValueRef value;
 
@@ -801,6 +917,8 @@ js_define_class (js_env_t *env, const char *name, size_t len, js_function_cb con
   JSStringRelease(ref);
 
   *result = (js_value_t *) class;
+
+  js_attach_to_handle_scope(env, env->scope, class);
 
   return 0;
 }
@@ -1083,6 +1201,8 @@ js_create_delegate (js_env_t *env, const js_delegate_callbacks_t *callbacks, voi
 
   *result = (js_value_t *) object;
 
+  js_attach_to_handle_scope(env, env->scope, object);
+
   return 0;
 }
 
@@ -1216,28 +1336,44 @@ js_check_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag, 
 
 int
 js_create_int32 (js_env_t *env, int32_t value, js_value_t **result) {
-  *result = (js_value_t *) JSValueMakeNumber(env->context, (double) value);
+  JSValueRef number = JSValueMakeNumber(env->context, (double) value);
+
+  *result = (js_value_t *) number;
+
+  js_attach_to_handle_scope(env, env->scope, number);
 
   return 0;
 }
 
 int
 js_create_uint32 (js_env_t *env, uint32_t value, js_value_t **result) {
-  *result = (js_value_t *) JSValueMakeNumber(env->context, (double) value);
+  JSValueRef number = JSValueMakeNumber(env->context, (double) value);
+
+  *result = (js_value_t *) number;
+
+  js_attach_to_handle_scope(env, env->scope, number);
 
   return 0;
 }
 
 int
 js_create_int64 (js_env_t *env, int64_t value, js_value_t **result) {
-  *result = (js_value_t *) JSValueMakeNumber(env->context, (double) value);
+  JSValueRef number = JSValueMakeNumber(env->context, (double) value);
+
+  *result = (js_value_t *) number;
+
+  js_attach_to_handle_scope(env, env->scope, number);
 
   return 0;
 }
 
 int
 js_create_double (js_env_t *env, double value, js_value_t **result) {
-  *result = (js_value_t *) JSValueMakeNumber(env->context, value);
+  JSValueRef number = JSValueMakeNumber(env->context, value);
+
+  *result = (js_value_t *) number;
+
+  js_attach_to_handle_scope(env, env->scope, number);
 
   return 0;
 }
@@ -1256,9 +1392,13 @@ js_create_bigint_int64 (js_env_t *env, int64_t value, js_value_t **result) {
 
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
 
-  *result = (js_value_t *) JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
+  JSValueRef bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
+
+  *result = (js_value_t *) bigint;
 
   if (env->exception) return js_propagate_exception(env);
+
+  js_attach_to_handle_scope(env, env->scope, bigint);
 
   return 0;
 }
@@ -1277,9 +1417,13 @@ js_create_bigint_uint64 (js_env_t *env, uint64_t value, js_value_t **result) {
 
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
 
-  *result = (js_value_t *) JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
+  JSValueRef bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
+
+  *result = (js_value_t *) bigint;
 
   if (env->exception) return js_propagate_exception(env);
+
+  js_attach_to_handle_scope(env, env->scope, bigint);
 
   return 0;
 }
@@ -1298,9 +1442,13 @@ js_create_string_utf8 (js_env_t *env, const utf8_t *str, size_t len, js_value_t 
 
   ref = JSStringCreateWithCharactersNoCopy(utf16, utf16_len);
 
-  *result = (js_value_t *) JSValueMakeString(env->context, ref);
+  JSValueRef string = JSValueMakeString(env->context, ref);
+
+  *result = (js_value_t *) string;
 
   JSStringRelease(ref);
+
+  js_attach_to_handle_scope(env, env->scope, string);
 
   return 0;
 }
@@ -1313,9 +1461,13 @@ js_create_string_utf16le (js_env_t *env, const utf16_t *str, size_t len, js_valu
 
   ref = JSStringCreateWithCharacters(str, len);
 
-  *result = (js_value_t *) JSValueMakeString(env->context, ref);
+  JSValueRef string = JSValueMakeString(env->context, ref);
+
+  *result = (js_value_t *) string;
 
   JSStringRelease(ref);
+
+  js_attach_to_handle_scope(env, env->scope, string);
 
   return 0;
 }
@@ -1326,16 +1478,24 @@ js_create_symbol (js_env_t *env, js_value_t *description, js_value_t **result) {
 
   if (env->exception) return js_propagate_exception(env);
 
-  *result = (js_value_t *) JSValueMakeSymbol(env->context, ref);
+  JSValueRef symbol = JSValueMakeSymbol(env->context, ref);
+
+  *result = (js_value_t *) symbol;
 
   JSStringRelease(ref);
+
+  js_attach_to_handle_scope(env, env->scope, symbol);
 
   return 0;
 }
 
 int
 js_create_object (js_env_t *env, js_value_t **result) {
-  *result = (js_value_t *) JSObjectMake(env->context, NULL, NULL);
+  JSObjectRef object = JSObjectMake(env->context, NULL, NULL);
+
+  *result = (js_value_t *) object;
+
+  js_attach_to_handle_scope(env, env->scope, object);
 
   return 0;
 }
@@ -1349,6 +1509,8 @@ on_function_finalize (JSObjectRef external) {
 
 static JSValueRef
 on_function_call (JSContextRef context, JSObjectRef function, JSObjectRef receiver, size_t argc, const JSValueRef argv[], JSValueRef *exception) {
+  int err;
+
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_function");
 
   JSValueRef external = JSObjectGetProperty(context, function, ref, NULL);
@@ -1367,7 +1529,14 @@ on_function_call (JSContextRef context, JSObjectRef function, JSObjectRef receiv
     .new_target = JSValueMakeUndefined(env->context),
   };
 
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
+  assert(err == 0);
+
   js_value_t *result = callback->cb(env, &callback_info);
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
 
   JSValueRef value;
 
@@ -1419,12 +1588,16 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
     ref,
     external,
     kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
-    NULL
+    &env->exception
   );
+
+  assert(env->exception == NULL);
 
   JSStringRelease(ref);
 
   *result = (js_value_t *) function;
+
+  js_attach_to_handle_scope(env, env->scope, function);
 
   return 0;
 }
@@ -1480,6 +1653,8 @@ js_create_function_with_source (js_env_t *env, const char *name, size_t name_len
 
   *result = (js_value_t *) function;
 
+  js_attach_to_handle_scope(env, env->scope, function);
+
   return 0;
 }
 
@@ -1490,9 +1665,13 @@ js_create_function_with_ffi (js_env_t *env, const char *name, size_t len, js_fun
 
 int
 js_create_array (js_env_t *env, js_value_t **result) {
-  *result = (js_value_t *) JSObjectMakeArray(env->context, 0, NULL, &env->exception);
+  JSObjectRef array = JSObjectMakeArray(env->context, 0, NULL, &env->exception);
 
   if (env->exception) return js_propagate_exception(env);
+
+  *result = (js_value_t *) array;
+
+  js_attach_to_handle_scope(env, env->scope, array);
 
   return 0;
 }
@@ -1501,9 +1680,13 @@ int
 js_create_array_with_length (js_env_t *env, size_t len, js_value_t **result) {
   JSValueRef argv[1] = {JSValueMakeNumber(env->context, (double) len)};
 
-  *result = (js_value_t *) JSObjectMakeArray(env->context, 1, argv, &env->exception);
+  JSObjectRef array = JSObjectMakeArray(env->context, 1, argv, &env->exception);
 
   if (env->exception) return js_propagate_exception(env);
+
+  *result = (js_value_t *) array;
+
+  js_attach_to_handle_scope(env, env->scope, array);
 
   return 0;
 }
@@ -1532,6 +1715,8 @@ js_create_external (js_env_t *env, void *data, js_finalize_cb finalize_cb, void 
 
   *result = (js_value_t *) external;
 
+  js_attach_to_handle_scope(env, env->scope, external);
+
   return 0;
 }
 
@@ -1549,9 +1734,13 @@ js_create_date (js_env_t *env, double time, js_value_t **result) {
 
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) time)};
 
-  *result = (js_value_t *) JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+  JSValueRef date = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
 
   if (env->exception) return js_propagate_exception(env);
+
+  *result = (js_value_t *) date;
+
+  js_attach_to_handle_scope(env, env->scope, date);
 
   return 0;
 }
@@ -1582,6 +1771,8 @@ js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_
   }
 
   *result = (js_value_t *) error;
+
+  js_attach_to_handle_scope(env, env->scope, error);
 
   return 0;
 }
@@ -1623,6 +1814,8 @@ js_create_type_error (js_env_t *env, js_value_t *code, js_value_t *message, js_v
 
   *result = (js_value_t *) error;
 
+  js_attach_to_handle_scope(env, env->scope, error);
+
   return 0;
 }
 
@@ -1662,6 +1855,8 @@ js_create_range_error (js_env_t *env, js_value_t *code, js_value_t *message, js_
   }
 
   *result = (js_value_t *) error;
+
+  js_attach_to_handle_scope(env, env->scope, error);
 
   return 0;
 }
@@ -1703,6 +1898,8 @@ js_create_syntax_error (js_env_t *env, js_value_t *code, js_value_t *message, js
 
   *result = (js_value_t *) error;
 
+  js_attach_to_handle_scope(env, env->scope, error);
+
   return 0;
 }
 
@@ -1721,6 +1918,8 @@ js_create_promise (js_env_t *env, js_deferred_t **deferred, js_value_t **promise
 
   *deferred = result;
   *promise = (js_value_t *) value;
+
+  js_attach_to_handle_scope(env, env->scope, value);
 
   return 0;
 }
@@ -1781,6 +1980,8 @@ js_create_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **resu
     if (env->exception) return js_propagate_exception(env);
   }
 
+  js_attach_to_handle_scope(env, env->scope, arraybuffer);
+
   return 0;
 }
 
@@ -1813,6 +2014,8 @@ js_create_arraybuffer_with_backing_store (js_env_t *env, js_arraybuffer_backing_
     *len = backing_store->len;
   }
 
+  js_attach_to_handle_scope(env, env->scope, arraybuffer);
+
   return 0;
 }
 
@@ -1838,6 +2041,8 @@ js_create_unsafe_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t
   if (data) {
     *data = bytes;
   }
+
+  js_attach_to_handle_scope(env, env->scope, arraybuffer);
 
   return 0;
 }
@@ -1871,6 +2076,8 @@ js_create_external_arraybuffer (js_env_t *env, void *data, size_t len, js_finali
   }
 
   *result = (js_value_t *) arraybuffer;
+
+  js_attach_to_handle_scope(env, env->scope, arraybuffer);
 
   return 0;
 }
@@ -2039,6 +2246,8 @@ js_create_typedarray (js_env_t *env, js_typedarray_type_t type, size_t len, js_v
 
   *result = (js_value_t *) typedarray;
 
+  js_attach_to_handle_scope(env, env->scope, typedarray);
+
   return 0;
 }
 
@@ -2060,6 +2269,8 @@ js_create_dataview (js_env_t *env, size_t len, js_value_t *arraybuffer, size_t o
 
   *result = (js_value_t *) dataview;
 
+  js_attach_to_handle_scope(env, env->scope, dataview);
+
   return 0;
 }
 
@@ -2068,6 +2279,8 @@ js_coerce_to_boolean (js_env_t *env, js_value_t *value, js_value_t **result) {
   JSValueRef boolean = JSValueMakeBoolean(env->context, JSValueToBoolean(env->context, (JSValueRef) value));
 
   *result = (js_value_t *) boolean;
+
+  js_attach_to_handle_scope(env, env->scope, boolean);
 
   return 0;
 }
@@ -2079,6 +2292,8 @@ js_coerce_to_number (js_env_t *env, js_value_t *value, js_value_t **result) {
   if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) number;
+
+  js_attach_to_handle_scope(env, env->scope, number);
 
   return 0;
 }
@@ -2095,6 +2310,8 @@ js_coerce_to_string (js_env_t *env, js_value_t *value, js_value_t **result) {
 
   *result = (js_value_t *) string;
 
+  js_attach_to_handle_scope(env, env->scope, string);
+
   return 0;
 }
 
@@ -2105,6 +2322,8 @@ js_coerce_to_object (js_env_t *env, js_value_t *value, js_value_t **result) {
   if (env->exception) return js_propagate_exception(env);
 
   *result = (js_value_t *) object;
+
+  js_attach_to_handle_scope(env, env->scope, object);
 
   return 0;
 }
@@ -2368,28 +2587,44 @@ js_strict_equals (js_env_t *env, js_value_t *a, js_value_t *b, bool *result) {
 
 int
 js_get_global (js_env_t *env, js_value_t **result) {
-  *result = (js_value_t *) JSContextGetGlobalObject(env->context);
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  *result = (js_value_t *) global;
+
+  js_attach_to_handle_scope(env, env->scope, global);
 
   return 0;
 }
 
 int
 js_get_undefined (js_env_t *env, js_value_t **result) {
-  *result = (js_value_t *) JSValueMakeUndefined(env->context);
+  JSValueRef undefined = JSValueMakeUndefined(env->context);
+
+  *result = (js_value_t *) undefined;
+
+  js_attach_to_handle_scope(env, env->scope, undefined);
 
   return 0;
 }
 
 int
 js_get_null (js_env_t *env, js_value_t **result) {
-  *result = (js_value_t *) JSValueMakeNull(env->context);
+  JSValueRef null = JSValueMakeNull(env->context);
+
+  *result = (js_value_t *) null;
+
+  js_attach_to_handle_scope(env, env->scope, null);
 
   return 0;
 }
 
 int
 js_get_boolean (js_env_t *env, bool value, js_value_t **result) {
-  *result = (js_value_t *) JSValueMakeBoolean(env->context, value);
+  JSValueRef boolean = JSValueMakeBoolean(env->context, value);
+
+  *result = (js_value_t *) boolean;
+
+  js_attach_to_handle_scope(env, env->scope, boolean);
 
   return 0;
 }
@@ -2550,7 +2785,11 @@ js_get_array_length (js_env_t *env, js_value_t *value, uint32_t *result) {
 
 int
 js_get_prototype (js_env_t *env, js_value_t *object, js_value_t **result) {
-  *result = (js_value_t *) JSObjectGetPrototype(env->context, (JSObjectRef) object);
+  JSValueRef prototype = JSObjectGetPrototype(env->context, (JSObjectRef) object);
+
+  *result = (js_value_t *) prototype;
+
+  js_attach_to_handle_scope(env, env->scope, prototype);
 
   return 0;
 }
@@ -2583,7 +2822,11 @@ js_get_property_names (js_env_t *env, js_value_t *object, js_value_t **result) {
 
   JSPropertyNameArrayRelease(properties);
 
-  *result = (js_value_t *) array;
+  if (result) {
+    *result = (js_value_t *) array;
+
+    js_attach_to_handle_scope(env, env->scope, array);
+  }
 
   return 0;
 
@@ -2603,7 +2846,11 @@ js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t 
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) *result = (js_value_t *) value;
+  if (result) {
+    *result = (js_value_t *) value;
+
+    js_attach_to_handle_scope(env, env->scope, value);
+  }
 
   return 0;
 }
@@ -2665,7 +2912,11 @@ js_get_named_property (js_env_t *env, js_value_t *object, const char *name, js_v
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) *result = (js_value_t *) value;
+  if (result) {
+    *result = (js_value_t *) value;
+
+    js_attach_to_handle_scope(env, env->scope, value);
+  }
 
   return 0;
 }
@@ -2735,7 +2986,11 @@ js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **
 
   if (env->exception) return js_propagate_exception(env);
 
-  *result = (js_value_t *) value;
+  if (result) {
+    *result = (js_value_t *) value;
+
+    js_attach_to_handle_scope(env, env->scope, value);
+  }
 
   return 0;
 }
@@ -2894,6 +3149,8 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
 
   if (parraybuffer) {
     *parraybuffer = (js_value_t *) arraybuffer;
+
+    js_attach_to_handle_scope(env, env->scope, arraybuffer);
   }
 
   if (poffset) {
@@ -2959,6 +3216,8 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
 
   if (parraybuffer) {
     *parraybuffer = (js_value_t *) arraybuffer;
+
+    js_attach_to_handle_scope(env, env->scope, arraybuffer);
   }
 
   if (poffset) {
@@ -2978,7 +3237,11 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) *result = (js_value_t *) value;
+  if (result) {
+    *result = (js_value_t *) value;
+
+    js_attach_to_handle_scope(env, env->scope, value);
+  }
 
   return 0;
 }
@@ -3008,7 +3271,11 @@ js_new_instance (js_env_t *env, js_value_t *constructor, size_t argc, js_value_t
 
   if (env->exception) return js_propagate_exception(env);
 
-  if (result) *result = (js_value_t *) value;
+  if (result) {
+    *result = (js_value_t *) value;
+
+    js_attach_to_handle_scope(env, env->scope, value);
+  }
 
   return 0;
 }
@@ -3353,6 +3620,8 @@ js_get_and_clear_last_exception (js_env_t *env, js_value_t **result) {
   if (env->exception == NULL) return js_get_undefined(env, result);
 
   *result = (js_value_t *) env->exception;
+
+  js_attach_to_handle_scope(env, env->scope, env->exception);
 
   env->exception = NULL;
 
