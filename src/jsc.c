@@ -484,6 +484,8 @@ js_open_handle_scope (js_env_t *env, js_handle_scope_t **result) {
 
 int
 js_close_handle_scope (js_env_t *env, js_handle_scope_t *scope) {
+  // Allow continuing even with a pending exception
+
   for (size_t i = 0; i < scope->len; i++) {
     JSValueUnprotect(env->context, scope->values[i]);
   }
@@ -510,6 +512,8 @@ js_open_escapable_handle_scope (js_env_t *env, js_escapable_handle_scope_t **res
 
 int
 js_close_escapable_handle_scope (js_env_t *env, js_escapable_handle_scope_t *scope) {
+  // Allow continuing even with a pending exception
+
   int err = js_close_handle_scope(env, scope->scope);
 
   free(scope);
@@ -704,6 +708,8 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
 
 int
 js_delete_reference (js_env_t *env, js_ref_t *reference) {
+  // Allow continuing even with a pending exception
+
   if (JSValueIsObject(env->context, reference->value)) {
     JSValueRef external = JSObjectGetPropertyForKey(env->context, (JSObjectRef) reference->value, reference->symbol, NULL);
 
@@ -2253,6 +2259,8 @@ js_get_sharedarraybuffer_backing_store (js_env_t *env, js_value_t *sharedarraybu
 
 int
 js_release_arraybuffer_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store) {
+  // Allow continuing even with a pending exception
+
   if (--backing_store->references == 0) {
     JSValueUnprotect(env->context, backing_store->owner);
 
@@ -3863,6 +3871,8 @@ js_throw_syntax_errorf (js_env_t *env, const char *code, const char *message, ..
 
 int
 js_is_exception_pending (js_env_t *env, bool *result) {
+  // Allow continuing even with a pending exception
+
   *result = env->exception != NULL;
 
   return 0;
@@ -3870,6 +3880,8 @@ js_is_exception_pending (js_env_t *env, bool *result) {
 
 int
 js_get_and_clear_last_exception (js_env_t *env, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
   if (env->exception == NULL) return js_get_undefined(env, result);
 
   *result = (js_value_t *) env->exception;
@@ -3883,6 +3895,8 @@ js_get_and_clear_last_exception (js_env_t *env, js_value_t **result) {
 
 int
 js_fatal_exception (js_env_t *env, js_value_t *error) {
+  // Allow continuing even with a pending exception
+
   on_uncaught_exception(env, error);
 
   return 0;
