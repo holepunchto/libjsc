@@ -2253,8 +2253,6 @@ js_get_sharedarraybuffer_backing_store (js_env_t *env, js_value_t *sharedarraybu
 
 int
 js_release_arraybuffer_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store) {
-  if (env->exception) return -1;
-
   if (--backing_store->references == 0) {
     JSValueUnprotect(env->context, backing_store->owner);
 
