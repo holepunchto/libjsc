@@ -120,10 +120,6 @@ list(APPEND tests
 
 list(APPEND skipped_tests
   # Not supported
-  atomics-wait-timeout
-  atomics-wait-timeout-notify
-
-  # Not supported
   create-function-with-ffi
   create-function-with-ffi-arraybuffer
   create-function-with-ffi-pointer
@@ -131,10 +127,15 @@ list(APPEND skipped_tests
   create-function-with-ffi-string
   create-function-with-ffi-uint8array
 
+  # Depends on JIT
+  wasm
+  wasm-async
+
   # https://bugs.webkit.org/show_bug.cgi?id=250554
+  atomics-wait-timeout
+  atomics-wait-timeout-notify
   create-promise-reject
   create-promise-resolve
-  wasm-async
 
   # https://bugs.webkit.org/show_bug.cgi?id=250511
   create-reference-bigint
