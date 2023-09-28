@@ -700,12 +700,7 @@ js_delete_reference (js_env_t *env, js_ref_t *reference) {
 
     assert(exception == NULL);
 
-    JSObjectDeletePropertyForKey(
-      env->context,
-      (JSObjectRef) reference->value,
-      reference->symbol,
-      &exception
-    );
+    JSObjectDeletePropertyForKey(env->context, (JSObjectRef) reference->value, reference->symbol, &exception);
 
     assert(exception == NULL);
   }
@@ -1038,12 +1033,7 @@ js_unwrap (js_env_t *env, js_value_t *object, void **result) {
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
-  JSValueRef external = JSObjectGetProperty(
-    env->context,
-    (JSObjectRef) object,
-    ref,
-    &env->exception
-  );
+  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
 
   JSStringRelease(ref);
 
@@ -1062,12 +1052,7 @@ js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
-  JSValueRef external = JSObjectGetProperty(
-    env->context,
-    (JSObjectRef) object,
-    ref,
-    &env->exception
-  );
+  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
 
   if (env->exception) {
     JSStringRelease(ref);
@@ -1277,12 +1262,7 @@ js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb 
   JSObjectRef external;
 
   if (JSObjectHasProperty(env->context, (JSObjectRef) object, ref)) {
-    external = (JSObjectRef) JSObjectGetProperty(
-      env->context,
-      (JSObjectRef) object,
-      ref,
-      &exception
-    );
+    external = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &exception);
 
     assert(exception == NULL);
   } else {
@@ -1367,12 +1347,7 @@ js_check_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag, 
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_type_tag");
 
-  JSValueRef external = JSObjectGetProperty(
-    env->context,
-    (JSObjectRef) object,
-    ref,
-    &env->exception
-  );
+  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
 
   if (env->exception) return js_propagate_exception(env);
 
@@ -1723,16 +1698,7 @@ js_create_function_with_source (js_env_t *env, const char *name, size_t name_len
 
   JSStringRef source_ref = JSValueToStringCopy(env->context, (JSValueRef) source, NULL);
 
-  JSObjectRef function = JSObjectMakeFunction(
-    env->context,
-    name_ref,
-    args_len,
-    arg_refs,
-    source_ref,
-    file_ref,
-    offset,
-    &env->exception
-  );
+  JSObjectRef function = JSObjectMakeFunction(env->context, name_ref, args_len, arg_refs, source_ref, file_ref, offset, &env->exception);
 
   if (name_ref) JSStringRelease(name_ref);
   if (file_ref) JSStringRelease(file_ref);
