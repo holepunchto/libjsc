@@ -1241,7 +1241,6 @@ js_create_delegate (js_env_t *env, const js_delegate_callbacks_t *callbacks, voi
 static void
 on_finalizer_finalize (JSObjectRef external) {
   js_finalizer_list_t *next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
-
   js_finalizer_list_t *prev = NULL;
 
   while (next) {
