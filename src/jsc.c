@@ -67,8 +67,7 @@ struct js_handle_scope_s {
 };
 
 struct js_escapable_handle_scope_s {
-  js_handle_scope_t *scope;
-  bool escaped;
+  js_handle_scope_t *parent;
 };
 
 struct js_ref_s {
@@ -261,7 +260,8 @@ on_unhandled_rejection (js_env_t *env, js_callback_info_t *info) {
     size_t argc = 2;
     js_value_t *argv[2];
 
-    js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+    err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+    assert(err == 0);
 
     js_handle_scope_t *scope;
     err = js_open_handle_scope(env, &scope);
@@ -466,7 +466,7 @@ js_get_env_platform (js_env_t *env, js_platform_t **result) {
 
 int
 js_open_handle_scope (js_env_t *env, js_handle_scope_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   js_handle_scope_t *scope = malloc(sizeof(js_handle_scope_t));
 
@@ -501,24 +501,12 @@ js_close_handle_scope (js_env_t *env, js_handle_scope_t *scope) {
 
 int
 js_open_escapable_handle_scope (js_env_t *env, js_escapable_handle_scope_t **result) {
-  if (env->exception) return -1;
-
-  js_escapable_handle_scope_t *scope = malloc(sizeof(js_escapable_handle_scope_t));
-
-  scope->escaped = false;
-
-  return js_open_handle_scope(env, &scope->scope);
+  return js_open_handle_scope(env, (js_handle_scope_t **) result);
 }
 
 int
 js_close_escapable_handle_scope (js_env_t *env, js_escapable_handle_scope_t *scope) {
-  // Allow continuing even with a pending exception
-
-  int err = js_close_handle_scope(env, scope->scope);
-
-  free(scope);
-
-  return err;
+  return js_close_handle_scope(env, (js_handle_scope_t *) scope);
 }
 
 static inline void
@@ -539,17 +527,9 @@ int
 js_escape_handle (js_env_t *env, js_escapable_handle_scope_t *scope, js_value_t *escapee, js_value_t **result) {
   // Allow continuing even with a pending exception
 
-  if (scope->escaped) {
-    js_throw_error(env, NULL, "Scope has already been escaped");
-
-    return -1;
-  }
-
-  scope->escaped = true;
-
   *result = escapee;
 
-  js_attach_to_handle_scope(env, scope->scope->parent, (JSValueRef) escapee);
+  js_attach_to_handle_scope(env, scope->parent, (JSValueRef) escapee);
 
   return 0;
 }
@@ -558,9 +538,11 @@ int
 js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value_t *source, js_value_t **result) {
   if (env->exception) return -1;
 
-  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) source, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) source, &exception);
+
+  assert(exception == NULL);
 
   if (file == NULL) file = "";
 
@@ -659,7 +641,9 @@ on_reference_finalize (JSObjectRef external) {
 
 int
 js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   js_ref_t *reference = malloc(sizeof(js_ref_t));
 
@@ -683,23 +667,13 @@ js_create_reference (js_env_t *env, js_value_t *value, uint32_t count, js_ref_t 
       reference->symbol,
       external,
       kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
-      NULL
+      &exception
     );
 
-    if (reference->count > 0) JSValueProtect(env->context, reference->value);
-  } else {
-    if (reference->count == 0) {
-      js_throw_errorf(env, NULL, "Cannot make weak reference to non-object type");
-
-      free(reference);
-
-      return -1;
-    }
-
-    JSValueProtect(env->context, reference->value);
-
-    reference->symbol = NULL;
+    assert(exception == NULL);
   }
+
+  if (reference->count > 0) JSValueProtect(env->context, reference->value);
 
   *result = reference;
 
@@ -710,17 +684,30 @@ int
 js_delete_reference (js_env_t *env, js_ref_t *reference) {
   // Allow continuing even with a pending exception
 
-  if (JSValueIsObject(env->context, reference->value)) {
-    JSValueRef external = JSObjectGetPropertyForKey(env->context, (JSObjectRef) reference->value, reference->symbol, NULL);
+  JSValueRef exception = NULL;
 
-    JSObjectSetPrivate((JSObjectRef) external, NULL);
+  if (JSValueIsObject(env->context, reference->value)) {
+    JSValueRef external = JSObjectGetPropertyForKey(
+      env->context,
+      (JSObjectRef) reference->value,
+      reference->symbol,
+      &exception
+    );
+
+    assert(exception == NULL);
+
+    JSObjectSetPrivate((JSObjectRef) external, &exception);
+
+    assert(exception == NULL);
 
     JSObjectDeletePropertyForKey(
       env->context,
       (JSObjectRef) reference->value,
       reference->symbol,
-      NULL
+      &exception
     );
+
+    assert(exception == NULL);
   }
 
   if (reference->count > 0) JSValueUnprotect(env->context, reference->value);
@@ -734,13 +721,11 @@ js_delete_reference (js_env_t *env, js_ref_t *reference) {
 
 int
 js_reference_ref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   reference->count++;
 
-  if (JSValueIsObject(env->context, reference->value)) {
-    if (reference->count == 1) JSValueProtect(env->context, reference->value);
-  }
+  if (reference->count == 1) JSValueProtect(env->context, reference->value);
 
   if (result) *result = reference->count;
 
@@ -749,25 +734,13 @@ js_reference_ref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
 
 int
 js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  if (reference->count == 0) {
-    js_throw_error(env, NULL, "Cannot decrease reference count");
+  if (reference->count > 0) {
+    reference->count--;
 
-    return -1;
+    if (reference->count == 0) JSValueUnprotect(env->context, reference->value);
   }
-
-  if (reference->count == 1) {
-    if (JSValueIsObject(env->context, reference->value)) {
-      JSValueUnprotect(env->context, reference->value);
-    } else {
-      js_throw_errorf(env, NULL, "Cannot make weak reference to non-object type");
-
-      return -1;
-    }
-  }
-
-  reference->count--;
 
   if (result) *result = reference->count;
 
@@ -776,7 +749,7 @@ js_reference_unref (js_env_t *env, js_ref_t *reference, uint32_t *result) {
 
 int
 js_get_reference_value (js_env_t *env, js_ref_t *reference, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   if (reference->value == NULL) *result = NULL;
   else {
@@ -850,6 +823,8 @@ js_define_class (js_env_t *env, const char *name, size_t len, js_function_cb con
 
   int err;
 
+  JSValueRef exception = NULL;
+
   JSStringRef ref;
 
   JSObjectRef class = JSObjectMakeConstructor(env->context, NULL, on_constructor_call);
@@ -868,12 +843,12 @@ js_define_class (js_env_t *env, const char *name, size_t len, js_function_cb con
     ref,
     class,
     kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete,
-    &env->exception
+    &exception
   );
 
-  JSStringRelease(ref);
+  assert(exception == NULL);
 
-  if (env->exception) return js_propagate_exception(env);
+  JSStringRelease(ref);
 
   size_t instance_properties_len = 0;
   size_t static_properties_len = 0;
@@ -938,8 +913,10 @@ js_define_class (js_env_t *env, const char *name, size_t len, js_function_cb con
     ref,
     external,
     kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
-    NULL
+    &exception
   );
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
@@ -1061,9 +1038,16 @@ js_unwrap (js_env_t *env, js_value_t *object, void **result) {
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
-  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+  JSValueRef external = JSObjectGetProperty(
+    env->context,
+    (JSObjectRef) object,
+    ref,
+    &env->exception
+  );
 
   JSStringRelease(ref);
+
+  if (env->exception) return js_propagate_exception(env);
 
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
 
@@ -1078,7 +1062,18 @@ js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
-  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+  JSValueRef external = JSObjectGetProperty(
+    env->context,
+    (JSObjectRef) object,
+    ref,
+    &env->exception
+  );
+
+  if (env->exception) {
+    JSStringRelease(ref);
+
+    return js_propagate_exception(env);
+  }
 
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
 
@@ -1223,7 +1218,7 @@ on_delegate_finalize (JSObjectRef object) {
 
 int
 js_create_delegate (js_env_t *env, const js_delegate_callbacks_t *callbacks, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   js_delegate_t *delegate = malloc(sizeof(js_delegate_t));
 
@@ -1265,7 +1260,9 @@ on_finalizer_finalize (JSObjectRef external) {
 
 int
 js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   js_finalizer_list_t *prev = malloc(sizeof(js_finalizer_list_t));
 
@@ -1281,7 +1278,14 @@ js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb 
   JSObjectRef external;
 
   if (JSObjectHasProperty(env->context, (JSObjectRef) object, ref)) {
-    external = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
+    external = (JSObjectRef) JSObjectGetProperty(
+      env->context,
+      (JSObjectRef) object,
+      ref,
+      &exception
+    );
+
+    assert(exception == NULL);
   } else {
     external = JSObjectMake(env->context, env->classes.finalizer, NULL);
 
@@ -1291,13 +1295,13 @@ js_add_finalizer (js_env_t *env, js_value_t *object, void *data, js_finalize_cb 
       ref,
       external,
       kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
-      &env->exception
+      &exception
     );
+
+    assert(exception == NULL);
   }
 
   JSStringRelease(ref);
-
-  if (env->exception) return js_propagate_exception(env);
 
   prev->next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
 
@@ -1364,7 +1368,14 @@ js_check_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag, 
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_type_tag");
 
-  JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+  JSValueRef external = JSObjectGetProperty(
+    env->context,
+    (JSObjectRef) object,
+    ref,
+    &env->exception
+  );
+
+  if (env->exception) return js_propagate_exception(env);
 
   *result = false;
 
@@ -1379,7 +1390,7 @@ js_check_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag, 
 
 int
 js_create_int32 (js_env_t *env, int32_t value, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef number = JSValueMakeNumber(env->context, (double) value);
 
@@ -1392,7 +1403,7 @@ js_create_int32 (js_env_t *env, int32_t value, js_value_t **result) {
 
 int
 js_create_uint32 (js_env_t *env, uint32_t value, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef number = JSValueMakeNumber(env->context, (double) value);
 
@@ -1405,7 +1416,7 @@ js_create_uint32 (js_env_t *env, uint32_t value, js_value_t **result) {
 
 int
 js_create_int64 (js_env_t *env, int64_t value, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef number = JSValueMakeNumber(env->context, (double) value);
 
@@ -1418,7 +1429,7 @@ js_create_int64 (js_env_t *env, int64_t value, js_value_t **result) {
 
 int
 js_create_double (js_env_t *env, double value, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef number = JSValueMakeNumber(env->context, value);
 
@@ -1431,25 +1442,27 @@ js_create_double (js_env_t *env, double value, js_value_t **result) {
 
 int
 js_create_bigint_int64 (js_env_t *env, int64_t value, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
-
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
 
-  JSValueRef bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
+  JSValueRef bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &exception);
+
+  assert(exception == NULL);
 
   *result = (js_value_t *) bigint;
-
-  if (env->exception) return js_propagate_exception(env);
 
   js_attach_to_handle_scope(env, env->scope, bigint);
 
@@ -1458,25 +1471,27 @@ js_create_bigint_int64 (js_env_t *env, int64_t value, js_value_t **result) {
 
 int
 js_create_bigint_uint64 (js_env_t *env, uint64_t value, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
-
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
 
-  JSValueRef bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &env->exception);
+  JSValueRef bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &exception);
+
+  assert(exception == NULL);
 
   *result = (js_value_t *) bigint;
-
-  if (env->exception) return js_propagate_exception(env);
 
   js_attach_to_handle_scope(env, env->scope, bigint);
 
@@ -1485,7 +1500,7 @@ js_create_bigint_uint64 (js_env_t *env, uint64_t value, js_value_t **result) {
 
 int
 js_create_string_utf8 (js_env_t *env, const utf8_t *str, size_t len, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSStringRef ref;
 
@@ -1512,7 +1527,7 @@ js_create_string_utf8 (js_env_t *env, const utf8_t *str, size_t len, js_value_t 
 
 int
 js_create_string_utf16le (js_env_t *env, const utf16_t *str, size_t len, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSStringRef ref;
 
@@ -1533,11 +1548,13 @@ js_create_string_utf16le (js_env_t *env, const utf16_t *str, size_t len, js_valu
 
 int
 js_create_symbol (js_env_t *env, js_value_t *description, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) description, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) description, &exception);
+
+  assert(exception == NULL);
 
   JSValueRef symbol = JSValueMakeSymbol(env->context, ref);
 
@@ -1552,7 +1569,7 @@ js_create_symbol (js_env_t *env, js_value_t *description, js_value_t **result) {
 
 int
 js_create_object (js_env_t *env, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSObjectRef object = JSObjectMake(env->context, NULL, NULL);
 
@@ -1619,6 +1636,8 @@ int
 js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb cb, void *data, js_value_t **result) {
   if (env->exception) return -1;
 
+  JSValueRef exception = NULL;
+
   JSStringRef ref;
 
   if (len == (size_t) -1) {
@@ -1653,10 +1672,10 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
     ref,
     external,
     kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
-    &env->exception
+    &exception
   );
 
-  assert(env->exception == NULL);
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
@@ -1705,7 +1724,16 @@ js_create_function_with_source (js_env_t *env, const char *name, size_t name_len
 
   JSStringRef source_ref = JSValueToStringCopy(env->context, (JSValueRef) source, NULL);
 
-  JSObjectRef function = JSObjectMakeFunction(env->context, name_ref, args_len, arg_refs, source_ref, file_ref, offset, &env->exception);
+  JSObjectRef function = JSObjectMakeFunction(
+    env->context,
+    name_ref,
+    args_len,
+    arg_refs,
+    source_ref,
+    file_ref,
+    offset,
+    &env->exception
+  );
 
   if (name_ref) JSStringRelease(name_ref);
   if (file_ref) JSStringRelease(file_ref);
@@ -1732,11 +1760,13 @@ js_create_function_with_ffi (js_env_t *env, const char *name, size_t len, js_fun
 
 int
 js_create_array (js_env_t *env, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSObjectRef array = JSObjectMakeArray(env->context, 0, NULL, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  JSObjectRef array = JSObjectMakeArray(env->context, 0, NULL, &exception);
+
+  assert(exception == NULL);
 
   *result = (js_value_t *) array;
 
@@ -1747,13 +1777,15 @@ js_create_array (js_env_t *env, js_value_t **result) {
 
 int
 js_create_array_with_length (js_env_t *env, size_t len, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSValueRef argv[1] = {JSValueMakeNumber(env->context, (double) len)};
+  JSValueRef exception = NULL;
 
-  JSObjectRef array = JSObjectMakeArray(env->context, 1, argv, &env->exception);
+  JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) len)};
 
-  if (env->exception) return js_propagate_exception(env);
+  JSObjectRef array = JSObjectMakeArray(env->context, 1, argv, &exception);
+
+  assert(exception == NULL);
 
   *result = (js_value_t *) array;
 
@@ -1775,7 +1807,7 @@ on_external_finalize (JSObjectRef external) {
 
 int
 js_create_external (js_env_t *env, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
 
@@ -1795,23 +1827,25 @@ js_create_external (js_env_t *env, void *data, js_finalize_cb finalize_cb, void 
 
 int
 js_create_date (js_env_t *env, double time, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("Date");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
-
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) time)};
 
-  JSValueRef date = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+  JSValueRef date = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
 
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   *result = (js_value_t *) date;
 
@@ -1822,13 +1856,15 @@ js_create_date (js_env_t *env, double time, js_value_t **result) {
 
 int
 js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSValueRef argv[1] = {(JSValueRef) message};
+  JSValueRef exception = NULL;
 
-  JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &env->exception);
+  JSValueRef argv[] = {(JSValueRef) message};
 
-  if (env->exception) return js_propagate_exception(env);
+  JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &exception);
+
+  assert(exception == NULL);
 
   if (code) {
     JSStringRef ref = JSStringCreateWithUTF8CString("code");
@@ -1839,12 +1875,12 @@ js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_
       ref,
       (JSValueRef) code,
       kJSPropertyAttributeNone,
-      &env->exception
+      &exception
     );
 
-    JSStringRelease(ref);
+    assert(exception == NULL);
 
-    if (env->exception) return js_propagate_exception(env);
+    JSStringRelease(ref);
   }
 
   *result = (js_value_t *) error;
@@ -1856,23 +1892,25 @@ js_create_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_
 
 int
 js_create_type_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("TypeError");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
+  JSValueRef argv[] = {(JSValueRef) message};
 
-  JSValueRef argv[1] = {(JSValueRef) message};
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
 
-  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
-
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   if (code) {
     JSStringRef ref = JSStringCreateWithUTF8CString("code");
@@ -1883,12 +1921,12 @@ js_create_type_error (js_env_t *env, js_value_t *code, js_value_t *message, js_v
       ref,
       (JSValueRef) code,
       kJSPropertyAttributeNone,
-      &env->exception
+      &exception
     );
 
-    JSStringRelease(ref);
+    assert(exception == NULL);
 
-    if (env->exception) return js_propagate_exception(env);
+    JSStringRelease(ref);
   }
 
   *result = (js_value_t *) error;
@@ -1900,23 +1938,25 @@ js_create_type_error (js_env_t *env, js_value_t *code, js_value_t *message, js_v
 
 int
 js_create_range_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("RangeError");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
+  JSValueRef argv[] = {(JSValueRef) message};
 
-  JSValueRef argv[1] = {(JSValueRef) message};
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
 
-  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
-
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   if (code) {
     JSStringRef ref = JSStringCreateWithUTF8CString("code");
@@ -1927,12 +1967,12 @@ js_create_range_error (js_env_t *env, js_value_t *code, js_value_t *message, js_
       ref,
       (JSValueRef) code,
       kJSPropertyAttributeNone,
-      &env->exception
+      &exception
     );
 
-    JSStringRelease(ref);
+    assert(exception == NULL);
 
-    if (env->exception) return js_propagate_exception(env);
+    JSStringRelease(ref);
   }
 
   *result = (js_value_t *) error;
@@ -1944,23 +1984,25 @@ js_create_range_error (js_env_t *env, js_value_t *code, js_value_t *message, js_
 
 int
 js_create_syntax_error (js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("SyntaxError");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
+  JSValueRef argv[] = {(JSValueRef) message};
 
-  JSValueRef argv[1] = {(JSValueRef) message};
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
 
-  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
-
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   if (code) {
     JSStringRef ref = JSStringCreateWithUTF8CString("code");
@@ -1971,12 +2013,12 @@ js_create_syntax_error (js_env_t *env, js_value_t *code, js_value_t *message, js
       ref,
       (JSValueRef) code,
       kJSPropertyAttributeNone,
-      &env->exception
+      &exception
     );
 
-    JSStringRelease(ref);
+    assert(exception == NULL);
 
-    if (env->exception) return js_propagate_exception(env);
+    JSStringRelease(ref);
   }
 
   *result = (js_value_t *) error;
@@ -1988,13 +2030,15 @@ js_create_syntax_error (js_env_t *env, js_value_t *code, js_value_t *message, js
 
 int
 js_create_promise (js_env_t *env, js_deferred_t **deferred, js_value_t **promise) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSObjectRef resolve, reject;
 
-  JSObjectRef value = JSObjectMakeDeferredPromise(env->context, &resolve, &reject, &env->exception);
+  JSObjectRef value = JSObjectMakeDeferredPromise(env->context, &resolve, &reject, &exception);
 
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   js_deferred_t *result = malloc(sizeof(js_deferred_t));
 
@@ -2011,30 +2055,34 @@ js_create_promise (js_env_t *env, js_deferred_t **deferred, js_value_t **promise
 
 int
 js_resolve_deferred (js_env_t *env, js_deferred_t *deferred, js_value_t *resolution) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSValueRef argv[1] = {(JSValueRef) resolution};
+  JSValueRef exception = NULL;
 
-  JSObjectCallAsFunction(env->context, deferred->resolve, NULL, 1, argv, &env->exception);
+  JSValueRef argv[] = {(JSValueRef) resolution};
+
+  JSObjectCallAsFunction(env->context, deferred->resolve, NULL, 1, argv, &exception);
+
+  assert(exception == NULL);
 
   free(deferred);
-
-  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
 
 int
 js_reject_deferred (js_env_t *env, js_deferred_t *deferred, js_value_t *resolution) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSValueRef argv[1] = {(JSValueRef) resolution};
+  JSValueRef exception = NULL;
 
-  JSObjectCallAsFunction(env->context, deferred->reject, NULL, 1, argv, &env->exception);
+  JSValueRef argv[] = {(JSValueRef) resolution};
+
+  JSObjectCallAsFunction(env->context, deferred->reject, NULL, 1, argv, &exception);
+
+  assert(exception == NULL);
 
   free(deferred);
-
-  if (env->exception) return js_propagate_exception(env);
 
   return 0;
 }
@@ -2193,28 +2241,22 @@ js_detach_arraybuffer (js_env_t *env, js_value_t *arraybuffer) {
 
 int
 js_get_arraybuffer_backing_store (js_env_t *env, js_value_t *arraybuffer, js_arraybuffer_backing_store_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   js_arraybuffer_backing_store_t *backing_store = malloc(sizeof(js_arraybuffer_backing_store_t));
 
   backing_store->env = env;
   backing_store->references = 1;
 
-  backing_store->data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &env->exception);
+  backing_store->data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &exception);
 
-  if (env->exception) {
-    free(backing_store);
+  assert(exception == NULL);
 
-    return js_propagate_exception(env);
-  }
+  backing_store->len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &exception);
 
-  backing_store->len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &env->exception);
-
-  if (env->exception) {
-    free(backing_store);
-
-    return js_propagate_exception(env);
-  }
+  assert(exception == NULL);
 
   backing_store->owner = (JSValueRef) arraybuffer;
 
@@ -2370,7 +2412,7 @@ js_create_dataview (js_env_t *env, size_t len, js_value_t *arraybuffer, size_t o
 
   if (env->exception) return js_propagate_exception(env);
 
-  JSValueRef argv[3] = {(JSValueRef) arraybuffer, JSValueMakeNumber(env->context, offset), JSValueMakeNumber(env->context, len)};
+  JSValueRef argv[] = {(JSValueRef) arraybuffer, JSValueMakeNumber(env->context, offset), JSValueMakeNumber(env->context, len)};
 
   JSObjectRef dataview = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 3, argv, &env->exception);
 
@@ -2385,7 +2427,7 @@ js_create_dataview (js_env_t *env, size_t len, js_value_t *arraybuffer, size_t o
 
 int
 js_coerce_to_boolean (js_env_t *env, js_value_t *value, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef boolean = JSValueMakeBoolean(env->context, JSValueToBoolean(env->context, (JSValueRef) value));
 
@@ -2448,7 +2490,7 @@ js_coerce_to_object (js_env_t *env, js_value_t *value, js_value_t **result) {
 // https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_typeof (js_env_t *env, js_value_t *value, js_value_type_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSType type = JSValueGetType(env->context, (JSValueRef) value);
 
@@ -2496,7 +2538,7 @@ js_instanceof (js_env_t *env, js_value_t *object, js_value_t *constructor, bool 
 
 int
 js_is_undefined (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsUndefined(env->context, (JSValueRef) value);
 
@@ -2505,7 +2547,7 @@ js_is_undefined (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_null (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsNull(env->context, (JSValueRef) value);
 
@@ -2514,7 +2556,7 @@ js_is_null (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_boolean (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsBoolean(env->context, (JSValueRef) value);
 
@@ -2523,7 +2565,7 @@ js_is_boolean (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_number (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsNumber(env->context, (JSValueRef) value);
 
@@ -2532,7 +2574,7 @@ js_is_number (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_string (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsString(env->context, (JSValueRef) value);
 
@@ -2541,7 +2583,7 @@ js_is_string (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_symbol (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsSymbol(env->context, (JSValueRef) value);
 
@@ -2550,7 +2592,7 @@ js_is_symbol (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_object (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsObject(env->context, (JSValueRef) value);
 
@@ -2559,7 +2601,7 @@ js_is_object (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_function (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsObject(env->context, (JSValueRef) value) && JSObjectIsFunction(env->context, (JSObjectRef) value);
 
@@ -2568,7 +2610,7 @@ js_is_function (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_array (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsArray(env->context, (JSValueRef) value);
 
@@ -2577,7 +2619,7 @@ js_is_array (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_external (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsObjectOfClass(env->context, (JSValueRef) value, env->classes.external);
 
@@ -2586,7 +2628,7 @@ js_is_external (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_wrapped (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
@@ -2599,7 +2641,7 @@ js_is_wrapped (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_delegate (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsObjectOfClass(env->context, (JSValueRef) value, env->classes.delegate);
 
@@ -2616,7 +2658,7 @@ js_is_bigint (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_date (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsDate(env->context, (JSValueRef) value);
 
@@ -2625,49 +2667,55 @@ js_is_date (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_error (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSStringRef ref = JSStringCreateWithUTF8CString("Error");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
 
-  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
-
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   return 0;
 }
 
 int
 js_is_promise (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSStringRef ref = JSStringCreateWithUTF8CString("Promise");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
 
-  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
-
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   return 0;
 }
 
 int
 js_is_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   *result = type == kJSTypedArrayTypeArrayBuffer;
 
@@ -2677,7 +2725,7 @@ js_is_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
 // https://bugs.webkit.org/show_bug.cgi?id=250552
 int
 js_is_detached_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = false;
 
@@ -2686,22 +2734,24 @@ js_is_detached_arraybuffer (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_sharedarraybuffer (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSStringRef ref = JSStringCreateWithUTF8CString("SharedArrayBuffer");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
-
-  if (env->exception) return js_propagate_exception(env);
 
   if (JSValueIsUndefined(env->context, constructor)) {
     *result = false;
   } else {
-    *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
+    *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
 
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
   }
 
   return 0;
@@ -2709,11 +2759,13 @@ js_is_sharedarraybuffer (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_typedarray (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   *result = type != kJSTypedArrayTypeNone && type != kJSTypedArrayTypeArrayBuffer;
 
@@ -2722,26 +2774,28 @@ js_is_typedarray (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_is_dataview (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSStringRef ref = JSStringCreateWithUTF8CString("DataView");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
 
-  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &env->exception);
-
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   return 0;
 }
 
 int
 js_strict_equals (js_env_t *env, js_value_t *a, js_value_t *b, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueIsStrictEqual(env->context, (JSValueRef) a, (JSValueRef) b);
 
@@ -2750,7 +2804,7 @@ js_strict_equals (js_env_t *env, js_value_t *a, js_value_t *b, bool *result) {
 
 int
 js_get_global (js_env_t *env, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
@@ -2763,7 +2817,7 @@ js_get_global (js_env_t *env, js_value_t **result) {
 
 int
 js_get_undefined (js_env_t *env, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef undefined = JSValueMakeUndefined(env->context);
 
@@ -2776,7 +2830,7 @@ js_get_undefined (js_env_t *env, js_value_t **result) {
 
 int
 js_get_null (js_env_t *env, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef null = JSValueMakeNull(env->context);
 
@@ -2789,7 +2843,7 @@ js_get_null (js_env_t *env, js_value_t **result) {
 
 int
 js_get_boolean (js_env_t *env, bool value, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef boolean = JSValueMakeBoolean(env->context, value);
 
@@ -2802,7 +2856,7 @@ js_get_boolean (js_env_t *env, bool value, js_value_t **result) {
 
 int
 js_get_value_bool (js_env_t *env, js_value_t *value, bool *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   *result = JSValueToBoolean(env->context, (JSValueRef) value);
 
@@ -2811,11 +2865,13 @@ js_get_value_bool (js_env_t *env, js_value_t *value, bool *result) {
 
 int
 js_get_value_int32 (js_env_t *env, js_value_t *value, int32_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   *result = (int32_t) number;
 
@@ -2824,11 +2880,13 @@ js_get_value_int32 (js_env_t *env, js_value_t *value, int32_t *result) {
 
 int
 js_get_value_uint32 (js_env_t *env, js_value_t *value, uint32_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   *result = (uint32_t) number;
 
@@ -2837,11 +2895,13 @@ js_get_value_uint32 (js_env_t *env, js_value_t *value, uint32_t *result) {
 
 int
 js_get_value_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   *result = (int64_t) number;
 
@@ -2850,11 +2910,13 @@ js_get_value_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
 
 int
 js_get_value_double (js_env_t *env, js_value_t *value, double *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  double number = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   *result = number;
 
@@ -2879,11 +2941,13 @@ js_get_value_bigint_uint64 (js_env_t *env, js_value_t *value, uint64_t *result, 
 
 int
 js_get_value_string_utf8 (js_env_t *env, js_value_t *value, utf8_t *str, size_t len, size_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   size_t utf16_len = JSStringGetLength(ref);
 
@@ -2906,11 +2970,13 @@ js_get_value_string_utf8 (js_env_t *env, js_value_t *value, utf8_t *str, size_t 
 
 int
 js_get_value_string_utf16le (js_env_t *env, js_value_t *value, utf16_t *str, size_t len, size_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   size_t utf16_len = JSStringGetLength(ref);
 
@@ -2935,7 +3001,7 @@ js_get_value_string_utf16le (js_env_t *env, js_value_t *value, utf16_t *str, siz
 
 int
 js_get_value_external (js_env_t *env, js_value_t *value, void **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) value);
 
@@ -2946,37 +3012,41 @@ js_get_value_external (js_env_t *env, js_value_t *value, void **result) {
 
 int
 js_get_value_date (js_env_t *env, js_value_t *value, double *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  *result = JSValueToNumber(env->context, (JSValueRef) value, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  *result = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
 
   return 0;
 }
 
 int
 js_get_array_length (js_env_t *env, js_value_t *value, uint32_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   JSStringRef ref = JSStringCreateWithUTF8CString("length");
 
-  JSValueRef length = JSObjectGetProperty(env->context, (JSObjectRef) value, ref, &env->exception);
+  JSValueRef length = JSObjectGetProperty(env->context, (JSObjectRef) value, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js_propagate_exception(env);
+  *result = (uint32_t) JSValueToNumber(env->context, length, &exception);
 
-  *result = (uint32_t) JSValueToNumber(env->context, length, &env->exception);
-
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   return 0;
 }
 
 int
 js_get_prototype (js_env_t *env, js_value_t *object, js_value_t **result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   JSValueRef prototype = JSObjectGetPrototype(env->context, (JSObjectRef) object);
 
@@ -3001,7 +3071,7 @@ js_get_property_names (js_env_t *env, js_value_t *object, js_value_t **result) {
 
   size_t len = JSPropertyNameArrayGetCount(properties);
 
-  JSValueRef argv[1] = {JSValueMakeNumber(env->context, (double) len)};
+  JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) len)};
 
   JSObjectRef array = JSObjectMakeArray(env->context, 1, argv, &env->exception);
 
@@ -3263,8 +3333,6 @@ js_delete_element (js_env_t *env, js_value_t *object, uint32_t index, bool *resu
 
 int
 js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *argc, js_value_t *argv[], js_value_t **receiver, void **data) {
-  if (env->exception) return -1;
-
   if (argv) {
     size_t i = 0, n = info->argc < *argc ? info->argc : *argc;
 
@@ -3300,8 +3368,6 @@ js_get_callback_info (js_env_t *env, const js_callback_info_t *info, size_t *arg
 
 int
 js_get_new_target (js_env_t *env, const js_callback_info_t *info, js_value_t **result) {
-  if (env->exception) return -1;
-
   *result = (js_value_t *) info->new_target;
 
   return 0;
@@ -3309,15 +3375,17 @@ js_get_new_target (js_env_t *env, const js_callback_info_t *info, js_value_t **r
 
 int
 js_get_arraybuffer_info (js_env_t *env, js_value_t *arraybuffer, void **pdata, size_t *plen) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  uint8_t *data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &env->exception);
+  JSValueRef exception = NULL;
 
-  if (env->exception) return js_propagate_exception(env);
+  uint8_t *data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &exception);
 
-  size_t len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &env->exception);
+  assert(exception == NULL);
 
-  if (env->exception) return js_propagate_exception(env);
+  size_t len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &exception);
+
+  assert(exception == NULL);
 
   if (pdata) {
     *pdata = data;
@@ -3332,44 +3400,46 @@ js_get_arraybuffer_info (js_env_t *env, js_value_t *arraybuffer, void **pdata, s
 
 int
 js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_type_t *ptype, void **pdata, size_t *plen, js_value_t **parraybuffer, size_t *poffset) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   size_t offset;
 
   JSObjectRef arraybuffer;
 
   if (pdata || poffset) {
-    offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &env->exception);
+    offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &exception);
 
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
   }
 
   if (pdata || parraybuffer) {
-    arraybuffer = JSObjectGetTypedArrayBuffer(env->context, (JSObjectRef) typedarray, &env->exception);
+    arraybuffer = JSObjectGetTypedArrayBuffer(env->context, (JSObjectRef) typedarray, &exception);
 
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
   }
 
   if (ptype) {
-    JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) typedarray, &env->exception);
+    JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) typedarray, &exception);
 
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
 
     *ptype = js_convert_to_typedarray_type(type);
   }
 
   if (pdata) {
-    void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
+    void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &exception);
 
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
 
     *pdata = data + offset;
   }
 
   if (plen) {
-    size_t len = JSObjectGetTypedArrayLength(env->context, (JSObjectRef) typedarray, &env->exception);
+    size_t len = JSObjectGetTypedArrayLength(env->context, (JSObjectRef) typedarray, &exception);
 
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
 
     *plen = len;
   }
@@ -3389,7 +3459,9 @@ js_get_typedarray_info (js_env_t *env, js_value_t *typedarray, js_typedarray_typ
 
 int
 js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t *plen, js_value_t **parraybuffer, size_t *poffset) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
 
   size_t offset;
 
@@ -3398,31 +3470,31 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
   if (pdata || poffset) {
     JSStringRef ref = JSStringCreateWithUTF8CString("byteOffset");
 
-    JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &env->exception);
+    JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &exception);
+
+    assert(exception == NULL);
 
     JSStringRelease(ref);
 
-    if (env->exception) return js_propagate_exception(env);
+    offset = (size_t) JSValueToNumber(env->context, value, &exception);
 
-    offset = (size_t) JSValueToNumber(env->context, value, &env->exception);
-
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
   }
 
   if (pdata || parraybuffer) {
     JSStringRef ref = JSStringCreateWithUTF8CString("buffer");
 
-    arraybuffer = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &env->exception);
+    arraybuffer = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &exception);
+
+    assert(exception == NULL);
 
     JSStringRelease(ref);
-
-    if (env->exception) return js_propagate_exception(env);
   }
 
   if (pdata) {
-    void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &env->exception);
+    void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &exception);
 
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
 
     *pdata = data + offset;
   }
@@ -3430,15 +3502,15 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
   if (plen) {
     JSStringRef ref = JSStringCreateWithUTF8CString("byteLength");
 
-    JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &env->exception);
+    JSValueRef value = JSObjectGetProperty(env->context, (JSObjectRef) dataview, ref, &exception);
+
+    assert(exception == NULL);
 
     JSStringRelease(ref);
 
-    if (env->exception) return js_propagate_exception(env);
+    double len = JSValueToNumber(env->context, value, &exception);
 
-    double len = JSValueToNumber(env->context, value, &env->exception);
-
-    if (env->exception) return js_propagate_exception(env);
+    assert(exception == NULL);
 
     *plen = (size_t) len;
   }
@@ -3462,7 +3534,14 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
 
   env->depth++;
 
-  JSValueRef value = JSObjectCallAsFunction(env->context, (JSObjectRef) function, (JSObjectRef) receiver, argc, (const JSValueRef *) argv, &env->exception);
+  JSValueRef value = JSObjectCallAsFunction(
+    env->context,
+    (JSObjectRef) function,
+    (JSObjectRef) receiver,
+    argc,
+    (const JSValueRef *) argv,
+    &env->exception
+  );
 
   env->depth--;
 
@@ -3483,7 +3562,14 @@ js_call_function_with_checkpoint (js_env_t *env, js_value_t *receiver, js_value_
 
   env->depth++;
 
-  JSValueRef value = JSObjectCallAsFunction(env->context, (JSObjectRef) function, (JSObjectRef) receiver, argc, (const JSValueRef *) argv, &env->exception);
+  JSValueRef value = JSObjectCallAsFunction(
+    env->context,
+    (JSObjectRef) function,
+    (JSObjectRef) receiver,
+    argc,
+    (const JSValueRef *) argv,
+    &env->exception
+  );
 
   env->depth--;
 
@@ -3500,7 +3586,13 @@ js_new_instance (js_env_t *env, js_value_t *constructor, size_t argc, js_value_t
 
   env->depth++;
 
-  JSValueRef value = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, argc, (const JSValueRef *) argv, &env->exception);
+  JSValueRef value = JSObjectCallAsConstructor(
+    env->context,
+    (JSObjectRef) constructor,
+    argc,
+    (const JSValueRef *) argv,
+    &env->exception
+  );
 
   env->depth--;
 
@@ -3551,15 +3643,17 @@ int
 js_throw_error (js_env_t *env, const char *code, const char *message) {
   if (env->exception) return -1;
 
+  JSValueRef exception = NULL;
+
   JSStringRef ref = JSStringCreateWithUTF8CString(message);
 
-  JSValueRef argv[1] = {JSValueMakeString(env->context, ref)};
+  JSValueRef argv[] = {JSValueMakeString(env->context, ref)};
 
   JSStringRelease(ref);
 
-  JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &env->exception);
+  JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &exception);
 
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -3576,12 +3670,12 @@ js_throw_error (js_env_t *env, const char *code, const char *message) {
       ref,
       value,
       kJSPropertyAttributeNone,
-      &env->exception
+      &exception
     );
 
-    JSStringRelease(ref);
+    assert(exception == NULL);
 
-    if (env->exception) return js_propagate_exception(env);
+    JSStringRelease(ref);
   }
 
   env->exception = error;
@@ -3624,25 +3718,27 @@ int
 js_throw_type_error (js_env_t *env, const char *code, const char *message) {
   if (env->exception) return -1;
 
+  JSValueRef exception = NULL;
+
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("TypeError");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
-
-  if (env->exception) return js_propagate_exception(env);
 
   ref = JSStringCreateWithUTF8CString(message);
 
-  JSValueRef argv[1] = {JSValueMakeString(env->context, ref)};
+  JSValueRef argv[] = {JSValueMakeString(env->context, ref)};
 
   JSStringRelease(ref);
 
-  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
 
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -3659,12 +3755,12 @@ js_throw_type_error (js_env_t *env, const char *code, const char *message) {
       ref,
       value,
       kJSPropertyAttributeNone,
-      &env->exception
+      &exception
     );
 
-    JSStringRelease(ref);
+    assert(exception == NULL);
 
-    if (env->exception) return js_propagate_exception(env);
+    JSStringRelease(ref);
   }
 
   env->exception = error;
@@ -3707,25 +3803,27 @@ int
 js_throw_range_error (js_env_t *env, const char *code, const char *message) {
   if (env->exception) return -1;
 
+  JSValueRef exception = NULL;
+
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("RangeError");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
-
-  if (env->exception) return js_propagate_exception(env);
 
   ref = JSStringCreateWithUTF8CString(message);
 
-  JSValueRef argv[1] = {JSValueMakeString(env->context, ref)};
+  JSValueRef argv[] = {JSValueMakeString(env->context, ref)};
 
   JSStringRelease(ref);
 
-  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
 
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -3742,12 +3840,12 @@ js_throw_range_error (js_env_t *env, const char *code, const char *message) {
       ref,
       value,
       kJSPropertyAttributeNone,
-      &env->exception
+      &exception
     );
 
-    JSStringRelease(ref);
+    assert(exception == NULL);
 
-    if (env->exception) return js_propagate_exception(env);
+    JSStringRelease(ref);
   }
 
   env->exception = error;
@@ -3790,25 +3888,27 @@ int
 js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
   if (env->exception) return -1;
 
+  JSValueRef exception = NULL;
+
   JSObjectRef global = JSContextGetGlobalObject(env->context);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("SyntaxError");
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &env->exception);
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
 
   JSStringRelease(ref);
-
-  if (env->exception) return js_propagate_exception(env);
 
   ref = JSStringCreateWithUTF8CString(message);
 
-  JSValueRef argv[1] = {JSValueMakeString(env->context, ref)};
+  JSValueRef argv[] = {JSValueMakeString(env->context, ref)};
 
   JSStringRelease(ref);
 
-  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &env->exception);
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
 
-  if (env->exception) return js_propagate_exception(env);
+  assert(exception == NULL);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -3825,12 +3925,12 @@ js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
       ref,
       value,
       kJSPropertyAttributeNone,
-      &env->exception
+      &exception
     );
 
-    JSStringRelease(ref);
+    assert(exception == NULL);
 
-    if (env->exception) return js_propagate_exception(env);
+    JSStringRelease(ref);
   }
 
   env->exception = error;
@@ -3904,7 +4004,7 @@ js_fatal_exception (js_env_t *env, js_value_t *error) {
 
 int
 js_adjust_external_memory (js_env_t *env, int64_t change_in_bytes, int64_t *result) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
   env->external_memory += change_in_bytes;
 
@@ -3919,15 +4019,11 @@ js_adjust_external_memory (js_env_t *env, int64_t change_in_bytes, int64_t *resu
 
 int
 js_request_garbage_collection (js_env_t *env) {
-  if (env->exception) return -1;
+  // Allow continuing even with a pending exception
 
-  if (!env->platform->options.expose_garbage_collection) {
-    js_throw_error(env, NULL, "Garbage collection is unavailable");
-
-    return -1;
+  if (env->platform->options.expose_garbage_collection) {
+    JSSynchronousGarbageCollectForDebugging(env->context);
   }
-
-  JSSynchronousGarbageCollectForDebugging(env->context);
 
   return 0;
 }

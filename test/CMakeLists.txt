@@ -14,8 +14,12 @@ list(APPEND tests
   coerce-number-to-string
   coerce-object-to-string
   coerce-string-to-number
+  coerce-symbol-to-string
   create-arraybuffer
   create-arraybuffer-with-backing-store
+  create-date
+  create-date-nan
+  create-date-overflow
   create-delegate
   create-delegate-get-without-has
   create-delegate-get-throw
