@@ -101,6 +101,7 @@ list(APPEND tests
   run-script-ignore-return
   run-script-throw
   set-named-property
+  terminate-execution
   threads
   throw-error
   throw-error-formatted

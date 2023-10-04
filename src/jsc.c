@@ -1,5 +1,6 @@
 #include <js.h>
 #include <js/ffi.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -312,12 +313,21 @@ on_delegate_get_property_names (JSContextRef context, JSObjectRef object, JSProp
 static void
 on_delegate_finalize (JSObjectRef object);
 
+static inline void
+js_reset_execution_time_limit (js_env_t *env) {
+  // Keep the watchdog running with an infinite timeout to ensure that we can
+  // change it in the middle of script evaluation.
+  JSContextGroupSetExecutionTimeLimit(env->group, INFINITY, NULL, NULL);
+}
+
 static inline int
 js_propagate_exception (js_env_t *env) {
   if (env->depth == 0) {
     JSValueRef error = env->exception;
 
     env->exception = NULL;
+
+    js_reset_execution_time_limit(env);
 
     on_uncaught_exception(env, (js_value_t *) error);
   }
@@ -389,6 +399,8 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
     .getPropertyNames = on_delegate_get_property_names,
     .finalize = on_delegate_finalize,
   });
+
+  js_reset_execution_time_limit(env);
 
   err = js_open_handle_scope(env, &env->scope);
   assert(err == 0);
@@ -3963,6 +3975,15 @@ js_fatal_exception (js_env_t *env, js_value_t *error) {
   // Allow continuing even with a pending exception
 
   on_uncaught_exception(env, error);
+
+  return 0;
+}
+
+int
+js_terminate_execution (js_env_t *env) {
+  // Allow continuing even with a pending exception
+
+  JSContextGroupSetExecutionTimeLimit(env->group, 0, NULL, NULL);
 
   return 0;
 }
