@@ -6,12 +6,12 @@ if(NOT TARGET uv)
   add_subdirectory(vendor/libuv EXCLUDE_FROM_ALL)
 endif()
 
-if(NOT TARGET js)
-  add_subdirectory(vendor/libjs EXCLUDE_FROM_ALL)
-endif()
-
 if(NOT TARGET utf)
   add_subdirectory(vendor/libutf EXCLUDE_FROM_ALL)
+endif()
+
+if(NOT TARGET js)
+  add_subdirectory(vendor/libjs EXCLUDE_FROM_ALL)
 endif()
 
 add_library(jsc OBJECT)
@@ -55,7 +55,7 @@ target_link_libraries(
     "-framework JavaScriptCore"
 )
 
-add_library(jsc_shared SHARED $<TARGET_OBJECTS:jsc>)
+add_library(jsc_shared SHARED)
 
 set_target_properties(
   jsc_shared
@@ -71,7 +71,7 @@ target_link_libraries(
     utf_shared
 )
 
-add_library(jsc_static STATIC $<TARGET_OBJECTS:jsc>)
+add_library(jsc_static STATIC)
 
 set_target_properties(
   jsc_static
@@ -92,5 +92,6 @@ install(TARGETS jsc_shared jsc_static)
 
 if(PROJECT_IS_TOP_LEVEL)
   enable_testing()
+
   add_subdirectory(test)
 endif()

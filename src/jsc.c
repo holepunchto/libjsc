@@ -35,6 +35,7 @@ struct js_env_s {
 
   JSContextGroupRef group;
   JSGlobalContextRef context;
+  JSObjectRef bindings;
 
   JSValueRef exception;
 
@@ -353,6 +354,7 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
   env->group = group;
   env->context = context;
+  env->bindings = JSObjectMake(context, NULL, NULL);
 
   env->exception = NULL;
 
@@ -402,7 +404,8 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
   js_reset_execution_time_limit(env);
 
-  err = js_open_handle_scope(env, &env->scope);
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
   assert(err == 0);
 
   js_value_t *fn;
@@ -413,6 +416,9 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
   assert(env->exception == NULL);
 
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
+
   *result = env;
 
   return 0;
@@ -420,11 +426,6 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
 
 int
 js_destroy_env (js_env_t *env) {
-  int err;
-
-  err = js_close_handle_scope(env, env->scope);
-  assert(err == 0);
-
   JSClassRelease(env->classes.reference);
   JSClassRelease(env->classes.wrap);
   JSClassRelease(env->classes.finalizer);
@@ -523,6 +524,8 @@ js_close_escapable_handle_scope (js_env_t *env, js_escapable_handle_scope_t *sco
 
 static inline void
 js_attach_to_handle_scope (js_env_t *env, js_handle_scope_t *scope, JSValueRef value) {
+  assert(scope);
+
   if (scope->len >= scope->capacity) {
     if (scope->capacity) scope->capacity *= 2;
     else scope->capacity = 4;
@@ -542,6 +545,15 @@ js_escape_handle (js_env_t *env, js_escapable_handle_scope_t *scope, js_value_t 
   *result = escapee;
 
   js_attach_to_handle_scope(env, scope->parent, (JSValueRef) escapee);
+
+  return 0;
+}
+
+int
+js_get_bindings (js_env_t *env, js_value_t **result) {
+  *result = (js_value_t *) env->bindings;
+
+  js_attach_to_handle_scope(env, env->scope, env->bindings);
 
   return 0;
 }
@@ -2586,6 +2598,33 @@ js_is_function (js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_is_async_function (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_generator_function (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_generator_object (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
+
+  return 0;
+}
+
+int
 js_is_array (js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
@@ -2643,6 +2682,27 @@ js_is_date (js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_is_regexp (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("RegExp");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
 js_is_error (js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
@@ -2670,6 +2730,138 @@ js_is_promise (js_env_t *env, js_value_t *value, bool *result) {
   JSValueRef exception = NULL;
 
   JSStringRef ref = JSStringCreateWithUTF8CString("Promise");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
+js_is_proxy (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_map (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("Map");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
+js_is_map_iterator (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_set (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("Set");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
+js_is_set_iterator (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_weak_map (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("WeakMap");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
+js_is_weak_set (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("WeakSet");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
+js_is_weak_ref (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("WeakRef");
 
   JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
 
@@ -2766,6 +2958,15 @@ js_is_dataview (js_env_t *env, js_value_t *value, bool *result) {
   *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
 
   assert(exception == NULL);
+
+  return 0;
+}
+
+int
+js_is_module_namespace (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
 
   return 0;
 }
@@ -3373,6 +3574,13 @@ js_get_arraybuffer_info (js_env_t *env, js_value_t *arraybuffer, void **pdata, s
   }
 
   return 0;
+}
+
+int
+js_get_sharedarraybuffer_info (js_env_t *env, js_value_t *sharedarraybuffer, void **data, size_t *len) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
 }
 
 int
@@ -4012,6 +4220,44 @@ js_request_garbage_collection (js_env_t *env) {
   }
 
   return 0;
+}
+
+int
+js_create_inspector (js_env_t *env, js_inspector_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_destroy_inspector (js_env_t *env, js_inspector_t *inspector) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_on_inspector_response (js_env_t *env, js_inspector_t *inspector, js_inspector_message_cb cb, void *data) {
+  return 0;
+}
+
+int
+js_on_inspector_paused (js_env_t *env, js_inspector_t *inspector, js_inspector_paused_cb cb, void *data) {
+  return 0;
+}
+
+int
+js_connect_inspector (js_env_t *env, js_inspector_t *inspector) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
+}
+
+int
+js_send_inspector_request (js_env_t *env, js_inspector_t *inspector, js_value_t *message) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return -1;
 }
 
 int

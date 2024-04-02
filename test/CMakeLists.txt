@@ -38,6 +38,7 @@ list(APPEND tests
   create-function-throw-indirect
   create-function-with-ffi
   create-function-with-ffi-arraybuffer
+  create-function-with-ffi-finalizer
   create-function-with-ffi-no-jit
   create-function-with-ffi-pointer
   create-function-with-ffi-receiver
@@ -87,6 +88,8 @@ list(APPEND tests
   get-value-string-utf8-no-null
   import-meta
   import-meta-throw
+  inspector
+  inspector-pause
   many-large-allocs
   many-small-allocs
   promise-rejection
@@ -103,6 +106,7 @@ list(APPEND tests
   set-named-property
   terminate-execution
   threads
+  threads-platform-loop
   throw-error
   throw-error-formatted
   typeof-bigint
@@ -117,6 +121,8 @@ list(APPEND tests
   typeof-undefined
   wasm
   wasm-async
+  wasm-async-io
+  wasm-async-io-multiple
   wrap
   wrap-with-finalizer
   wrap-with-reference
@@ -127,14 +133,21 @@ list(APPEND skipped_tests
   # Not supported
   create-function-with-ffi
   create-function-with-ffi-arraybuffer
+  create-function-with-ffi-finalizer
   create-function-with-ffi-pointer
   create-function-with-ffi-receiver
   create-function-with-ffi-string
   create-function-with-ffi-uint8array
 
+  # Not supported
+  inspector
+  inspector-pause
+
   # Depends on JIT
   wasm
   wasm-async
+  wasm-async-io
+  wasm-async-io-multiple
 
   # https://bugs.webkit.org/show_bug.cgi?id=250554
   atomics-wait-timeout
