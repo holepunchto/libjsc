@@ -2309,27 +2309,27 @@ js_set_arraybuffer_zero_fill_enabled (bool enabled) {
 static inline JSTypedArrayType
 js_convert_from_typedarray_type (js_typedarray_type_t type) {
   switch (type) {
-  case js_int8_array:
+  case js_int8array:
     return kJSTypedArrayTypeInt8Array;
-  case js_uint8_array:
+  case js_uint8array:
     return kJSTypedArrayTypeUint8Array;
-  case js_uint8_clamped_array:
+  case js_uint8clampedarray:
     return kJSTypedArrayTypeUint8ClampedArray;
-  case js_int16_array:
+  case js_int16array:
     return kJSTypedArrayTypeInt16Array;
-  case js_uint16_array:
+  case js_uint16array:
     return kJSTypedArrayTypeUint16Array;
-  case js_int32_array:
+  case js_int32array:
     return kJSTypedArrayTypeInt32Array;
-  case js_uint32_array:
+  case js_uint32array:
     return kJSTypedArrayTypeUint32Array;
-  case js_float32_array:
+  case js_float32array:
     return kJSTypedArrayTypeFloat32Array;
-  case js_float64_array:
+  case js_float64array:
     return kJSTypedArrayTypeFloat64Array;
-  case js_bigint64_array:
+  case js_bigint64array:
     return kJSTypedArrayTypeBigInt64Array;
-  case js_biguint64_array:
+  case js_biguint64array:
     return kJSTypedArrayTypeBigUint64Array;
   }
 }
@@ -2338,28 +2338,28 @@ static inline js_typedarray_type_t
 js_convert_to_typedarray_type (JSTypedArrayType type) {
   switch (type) {
   case kJSTypedArrayTypeInt8Array:
-    return js_int8_array;
+    return js_int8array;
   case kJSTypedArrayTypeInt16Array:
-    return js_int16_array;
+    return js_int16array;
     break;
   case kJSTypedArrayTypeInt32Array:
-    return js_int32_array;
+    return js_int32array;
   case kJSTypedArrayTypeUint8Array:
-    return js_uint8_array;
+    return js_uint8array;
   case kJSTypedArrayTypeUint8ClampedArray:
-    return js_uint8_clamped_array;
+    return js_uint8clampedarray;
   case kJSTypedArrayTypeUint16Array:
-    return js_uint16_array;
+    return js_uint16array;
   case kJSTypedArrayTypeUint32Array:
-    return js_uint32_array;
+    return js_uint32array;
   case kJSTypedArrayTypeFloat32Array:
-    return js_float32_array;
+    return js_float32array;
   case kJSTypedArrayTypeFloat64Array:
-    return js_float64_array;
+    return js_float64array;
   case kJSTypedArrayTypeBigInt64Array:
-    return js_bigint64_array;
+    return js_bigint64array;
   case kJSTypedArrayTypeBigUint64Array:
-    return js_biguint64_array;
+    return js_biguint64array;
 
   case kJSTypedArrayTypeArrayBuffer:
   case kJSTypedArrayTypeNone:
@@ -2562,6 +2562,48 @@ js_is_number (js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_is_int32 (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  if (JSValueIsNumber(env->context, (JSValueRef) value)) {
+    JSValueRef exception = NULL;
+
+    double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+    assert(exception == NULL);
+
+    double integral;
+
+    *result = modf(number, &integral) == 0.0 && integral >= INT32_MIN && integral <= INT32_MAX;
+  } else {
+    *result = false;
+  }
+
+  return 0;
+}
+
+int
+js_is_uint32 (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  if (JSValueIsNumber(env->context, (JSValueRef) value)) {
+    JSValueRef exception = NULL;
+
+    double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+    assert(exception == NULL);
+
+    double integral;
+
+    *result = modf(number, &integral) == 0.0 && integral >= 0.0 && integral <= UINT32_MAX;
+  } else {
+    *result = false;
+  }
+
+  return 0;
+}
+
+int
 js_is_string (js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
@@ -2616,7 +2658,16 @@ js_is_generator_function (js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
-js_is_generator_object (js_env_t *env, js_value_t *value, bool *result) {
+js_is_generator (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
+
+  return 0;
+}
+
+int
+js_is_arguments (js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
   *result = false;
@@ -2937,6 +2988,171 @@ js_is_typedarray (js_env_t *env, js_value_t *value, bool *result) {
   assert(exception == NULL);
 
   *result = type != kJSTypedArrayTypeNone && type != kJSTypedArrayTypeArrayBuffer;
+
+  return 0;
+}
+
+int
+js_is_int8array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeInt8Array;
+
+  return 0;
+}
+
+int
+js_is_uint8array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeUint8Array;
+
+  return 0;
+}
+
+int
+js_is_uint8clampedarray (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeUint8ClampedArray;
+
+  return 0;
+}
+
+int
+js_is_int16array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeInt16Array;
+
+  return 0;
+}
+
+int
+js_is_uint16array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeUint16Array;
+
+  return 0;
+}
+
+int
+js_is_int32array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeInt32Array;
+
+  return 0;
+}
+
+int
+js_is_uint32array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeUint32Array;
+
+  return 0;
+}
+
+int
+js_is_float32array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeFloat32Array;
+
+  return 0;
+}
+
+int
+js_is_float64array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeFloat64Array;
+
+  return 0;
+}
+
+int
+js_is_bigint64array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeBigInt64Array;
+
+  return 0;
+}
+
+int
+js_is_biguint64array (js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
+
+  assert(exception == NULL);
+
+  *result = type == kJSTypedArrayTypeBigUint64Array;
 
   return 0;
 }
