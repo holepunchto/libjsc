@@ -3792,6 +3792,7 @@ js_get_arraybuffer_info (js_env_t *env, js_value_t *arraybuffer, void **pdata, s
   return 0;
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_get_sharedarraybuffer_info (js_env_t *env, js_value_t *sharedarraybuffer, void **data, size_t *len) {
   js_throw_error(env, NULL, "Unsupported operation");
