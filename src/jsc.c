@@ -202,7 +202,7 @@ js_create_platform (uv_loop_t *loop, const js_platform_options_t *options, js_pl
   js_platform_t *platform = malloc(sizeof(js_platform_t));
 
   platform->loop = loop;
-  platform->options = options ? *options : (js_platform_options_t){};
+  platform->options = options ? *options : (js_platform_options_t) {};
 
   *result = platform;
 
@@ -349,6 +349,11 @@ js__reset_execution_time_limit (js_env_t *env) {
 }
 
 static inline int
+js__error (js_env_t *env) {
+  return env->exception ? js_pending_exception : js_uncaught_exception;
+}
+
+static inline int
 js__propagate_exception (js_env_t *env) {
   if (env->depth == 0) {
     JSValueRef error = env->exception;
@@ -360,7 +365,7 @@ js__propagate_exception (js_env_t *env) {
     js__on_uncaught_exception(env, (js_value_t *) error);
   }
 
-  return -1;
+  return js__error(env);
 }
 
 int
@@ -393,35 +398,35 @@ js_create_env (uv_loop_t *loop, js_platform_t *platform, const js_env_options_t 
   env->callbacks.unhandled_rejection = NULL;
   env->callbacks.unhandled_rejection_data = NULL;
 
-  env->classes.reference = JSClassCreate(&(JSClassDefinition){
+  env->classes.reference = JSClassCreate(&(JSClassDefinition) {
     .finalize = js__on_reference_finalize,
   });
 
-  env->classes.wrap = JSClassCreate(&(JSClassDefinition){
+  env->classes.wrap = JSClassCreate(&(JSClassDefinition) {
     .finalize = js__on_wrap_finalize,
   });
 
-  env->classes.finalizer = JSClassCreate(&(JSClassDefinition){
+  env->classes.finalizer = JSClassCreate(&(JSClassDefinition) {
     .finalize = js__on_finalizer_finalize,
   });
 
-  env->classes.type_tag = JSClassCreate(&(JSClassDefinition){
+  env->classes.type_tag = JSClassCreate(&(JSClassDefinition) {
     .finalize = js__on_type_tag_finalize,
   });
 
-  env->classes.function = JSClassCreate(&(JSClassDefinition){
+  env->classes.function = JSClassCreate(&(JSClassDefinition) {
     .finalize = js__on_function_finalize,
   });
 
-  env->classes.external = JSClassCreate(&(JSClassDefinition){
+  env->classes.external = JSClassCreate(&(JSClassDefinition) {
     .finalize = js__on_external_finalize,
   });
 
-  env->classes.constructor = JSClassCreate(&(JSClassDefinition){
+  env->classes.constructor = JSClassCreate(&(JSClassDefinition) {
     .finalize = js__on_constructor_finalize,
   });
 
-  env->classes.delegate = JSClassCreate(&(JSClassDefinition){
+  env->classes.delegate = JSClassCreate(&(JSClassDefinition) {
     .getProperty = js__on_delegate_get_property,
     .setProperty = js__on_delegate_set_property,
     .deleteProperty = js__on_delegate_delete_property,
@@ -577,6 +582,34 @@ js_escape_handle (js_env_t *env, js_escapable_handle_scope_t *scope, js_value_t 
 }
 
 int
+js_create_context (js_env_t *env, js_context_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return js__error(env);
+}
+
+int
+js_destroy_context (js_env_t *env, js_context_t *context) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return js__error(env);
+}
+
+int
+js_enter_context (js_env_t *env, js_context_t *context) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return js__error(env);
+}
+
+int
+js_exit_context (js_env_t *env, js_context_t *context) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return js__error(env);
+}
+
+int
 js_get_bindings (js_env_t *env, js_value_t **result) {
   *result = (js_value_t *) env->bindings;
 
@@ -587,7 +620,7 @@ js_get_bindings (js_env_t *env, js_value_t **result) {
 
 int
 js_run_script (js_env_t *env, const char *file, size_t len, int offset, js_value_t *source, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef exception = NULL;
 
@@ -624,7 +657,7 @@ int
 js_create_module (js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_meta_cb cb, void *data, js_module_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
@@ -632,7 +665,7 @@ int
 js_create_synthetic_module (js_env_t *env, const char *name, size_t len, js_value_t *const export_names[], size_t names_len, js_module_evaluate_cb cb, void *data, js_module_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
@@ -640,7 +673,7 @@ int
 js_delete_module (js_env_t *env, js_module_t *module) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
@@ -648,7 +681,7 @@ int
 js_get_module_name (js_env_t *env, js_module_t *module, const char **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
@@ -656,7 +689,7 @@ int
 js_get_module_namespace (js_env_t *env, js_module_t *module, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
@@ -664,7 +697,7 @@ int
 js_set_module_export (js_env_t *env, js_module_t *module, js_value_t *name, js_value_t *value) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
@@ -672,7 +705,7 @@ int
 js_instantiate_module (js_env_t *env, js_module_t *module, js_module_resolve_cb cb, void *data) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
@@ -680,7 +713,7 @@ int
 js_run_module (js_env_t *env, js_module_t *module, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 static void
@@ -863,7 +896,7 @@ js__on_constructor_call (JSContextRef context, JSObjectRef new_target, size_t ar
 
 int
 js_define_class (js_env_t *env, const char *name, size_t len, js_function_cb constructor, void *data, js_property_descriptor_t const properties[], size_t properties_len, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   int err;
 
@@ -973,7 +1006,7 @@ js_define_class (js_env_t *env, const char *name, size_t len, js_function_cb con
 
 int
 js_define_properties (js_env_t *env, js_value_t *object, js_property_descriptor_t const properties[], size_t properties_len) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   int err;
 
@@ -999,20 +1032,20 @@ js_define_properties (js_env_t *env, js_value_t *object, js_property_descriptor_
     if (property->getter || property->setter) {
       if (property->getter) {
         js_value_t *fn;
-        err = js_create_function(env, property->name, -1, property->getter, property->data, &fn);
+        err = js_create_function(env, "fn", -1, property->getter, property->data, &fn);
         assert(err == 0);
       }
 
       if (property->setter) {
         js_value_t *fn;
-        err = js_create_function(env, property->name, -1, property->setter, property->data, &fn);
+        err = js_create_function(env, "fn", -1, property->setter, property->data, &fn);
         assert(err == 0);
       }
 
-      return -1;
+      return js__error(env);
     } else if (property->method) {
       js_value_t *fn;
-      err = js_create_function(env, property->name, -1, property->method, property->data, &fn);
+      err = js_create_function(env, "fn", -1, property->method, property->data, &fn);
       assert(err == 0);
 
       value = (JSValueRef) fn;
@@ -1020,11 +1053,7 @@ js_define_properties (js_env_t *env, js_value_t *object, js_property_descriptor_
       value = (JSValueRef) property->value;
     }
 
-    JSStringRef name = JSStringCreateWithUTF8CString(property->name);
-
-    JSObjectSetProperty(env->context, (JSObjectRef) object, name, value, flags, &env->exception);
-
-    JSStringRelease(name);
+    JSObjectSetPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) property->name, value, flags, &env->exception);
 
     if (env->exception) return js__propagate_exception(env);
   }
@@ -1045,7 +1074,7 @@ js__on_wrap_finalize (JSObjectRef external) {
 
 int
 js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
 
@@ -1078,7 +1107,7 @@ js_wrap (js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_
 
 int
 js_unwrap (js_env_t *env, js_value_t *object, void **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
@@ -1097,7 +1126,7 @@ js_unwrap (js_env_t *env, js_value_t *object, void **result) {
 
 int
 js_remove_wrap (js_env_t *env, js_value_t *object, void **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
@@ -1349,7 +1378,7 @@ js__on_type_tag_finalize (JSObjectRef external) {
 
 int
 js_add_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   js_type_tag_t *existing = malloc(sizeof(js_type_tag_t));
 
@@ -1367,7 +1396,7 @@ js_add_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
 
     free(existing);
 
-    return -1;
+    return js__error(env);
   }
 
   JSObjectSetProperty(
@@ -1392,7 +1421,7 @@ js_add_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
 
 int
 js_check_type_tag (js_env_t *env, js_value_t *object, const js_type_tag_t *tag, bool *result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_type_tag");
 
@@ -1657,7 +1686,7 @@ js__on_function_call (JSContextRef context, JSObjectRef function, JSObjectRef re
 
 int
 js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb cb, void *data, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef exception = NULL;
 
@@ -1711,7 +1740,7 @@ js_create_function (js_env_t *env, const char *name, size_t len, js_function_cb 
 
 int
 js_create_function_with_source (js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef name_ref, file_ref;
 
@@ -2106,7 +2135,7 @@ int
 js_get_promise_state (js_env_t *env, js_value_t *promise, js_promise_state_t *result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=250554
@@ -2114,12 +2143,12 @@ int
 js_get_promise_result (js_env_t *env, js_value_t *promise, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
 js_create_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSObjectRef typedarray = JSObjectMakeTypedArray(env->context, kJSTypedArrayTypeUint8Array, len, &env->exception);
 
@@ -2155,7 +2184,7 @@ js__on_backed_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
 
 int
 js_create_arraybuffer_with_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, backing_store->data, backing_store->len, js__on_backed_arraybuffer_finalize, backing_store, &env->exception);
 
@@ -2185,7 +2214,7 @@ js__on_unsafe_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
 
 int
 js_create_unsafe_arraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   void *bytes = malloc(len);
 
@@ -2221,7 +2250,7 @@ js__on_external_arraybuffer_finalize (void *bytes, void *deallocatorContext) {
 
 int
 js_create_external_arraybuffer (js_env_t *env, void *data, size_t len, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
 
@@ -2250,7 +2279,7 @@ int
 js_detach_arraybuffer (js_env_t *env, js_value_t *arraybuffer) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
@@ -2286,7 +2315,7 @@ int
 js_create_sharedarraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=257709
@@ -2294,7 +2323,7 @@ int
 js_create_sharedarraybuffer_with_backing_store (js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=257709
@@ -2302,7 +2331,7 @@ int
 js_create_unsafe_sharedarraybuffer (js_env_t *env, size_t len, void **data, js_value_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=257709
@@ -2310,7 +2339,7 @@ int
 js_get_sharedarraybuffer_backing_store (js_env_t *env, js_value_t *sharedarraybuffer, js_arraybuffer_backing_store_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
@@ -2394,7 +2423,7 @@ js__convert_to_typedarray_type (JSTypedArrayType type) {
 
 int
 js_create_typedarray (js_env_t *env, js_typedarray_type_t type, size_t len, js_value_t *arraybuffer, size_t offset, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSObjectRef typedarray = JSObjectMakeTypedArrayWithArrayBufferAndOffset(
     env->context,
@@ -2416,7 +2445,7 @@ js_create_typedarray (js_env_t *env, js_typedarray_type_t type, size_t len, js_v
 
 int
 js_create_dataview (js_env_t *env, size_t len, js_value_t *arraybuffer, size_t offset, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("DataView");
 
@@ -2454,7 +2483,7 @@ js_coerce_to_boolean (js_env_t *env, js_value_t *value, js_value_t **result) {
 
 int
 js_coerce_to_number (js_env_t *env, js_value_t *value, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef number = JSValueMakeNumber(env->context, JSValueToNumber(env->context, (JSValueRef) value, &env->exception));
 
@@ -2469,7 +2498,7 @@ js_coerce_to_number (js_env_t *env, js_value_t *value, js_value_t **result) {
 
 int
 js_coerce_to_string (js_env_t *env, js_value_t *value, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &env->exception);
 
@@ -2488,7 +2517,7 @@ js_coerce_to_string (js_env_t *env, js_value_t *value, js_value_t **result) {
 
 int
 js_coerce_to_object (js_env_t *env, js_value_t *value, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSObjectRef object = JSValueToObject(env->context, (JSValueRef) value, &env->exception);
 
@@ -2534,6 +2563,9 @@ js_typeof (js_env_t *env, js_value_t *value, js_value_type_t *result) {
   case kJSTypeSymbol:
     *result = js_symbol;
     break;
+  case kJSTypeBigInt:
+    *result = js_bigint;
+    break;
   }
 
   return 0;
@@ -2541,7 +2573,7 @@ js_typeof (js_env_t *env, js_value_t *value, js_value_type_t *result) {
 
 int
 js_instanceof (js_env_t *env, js_value_t *object, js_value_t *constructor, bool *result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) object, (JSObjectRef) constructor, &env->exception);
 
@@ -2740,12 +2772,17 @@ js_is_delegate (js_env_t *env, js_value_t *value, bool *result) {
   return 0;
 }
 
-// https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_is_bigint (js_env_t *env, js_value_t *value, bool *result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  // Allow continuing even with a pending exception
 
-  return -1;
+  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
+    *result = JSValueIsBigInt(env->context, (JSValueRef) value);
+  } else {
+    *result = false;
+  }
+
+  return 0;
 }
 
 int
@@ -3288,11 +3325,19 @@ js_get_value_int32 (js_env_t *env, js_value_t *value, int32_t *result) {
 
   JSValueRef exception = NULL;
 
-  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
+    int32_t number = JSValueToInt32(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+    assert(exception == NULL);
 
-  *result = (int32_t) number;
+    *result = number;
+  } else {
+    double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+    assert(exception == NULL);
+
+    *result = (int32_t) number;
+  }
 
   return 0;
 }
@@ -3303,11 +3348,19 @@ js_get_value_uint32 (js_env_t *env, js_value_t *value, uint32_t *result) {
 
   JSValueRef exception = NULL;
 
-  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
+    uint32_t number = JSValueToUInt32(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+    assert(exception == NULL);
 
-  *result = (uint32_t) number;
+    *result = number;
+  } else {
+    double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+    assert(exception == NULL);
+
+    *result = (uint32_t) number;
+  }
 
   return 0;
 }
@@ -3318,11 +3371,19 @@ js_get_value_int64 (js_env_t *env, js_value_t *value, int64_t *result) {
 
   JSValueRef exception = NULL;
 
-  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
+    int64_t number = JSValueToInt64(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+    assert(exception == NULL);
 
-  *result = (int64_t) number;
+    *result = number;
+  } else {
+    double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
+
+    assert(exception == NULL);
+
+    *result = (int64_t) number;
+  }
 
   return 0;
 }
@@ -3342,20 +3403,42 @@ js_get_value_double (js_env_t *env, js_value_t *value, double *result) {
   return 0;
 }
 
-// https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_get_value_bigint_int64 (js_env_t *env, js_value_t *value, int64_t *result, bool *lossless) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
+    JSValueRef exception = NULL;
 
-  return -1;
+    int64_t number = JSValueToInt64(env->context, (JSValueRef) value, &exception);
+
+    assert(exception == NULL);
+
+    *result = number;
+
+    return 0;
+  } else {
+    js_throw_error(env, NULL, "Unsupported operation");
+
+    return js__error(env);
+  }
 }
 
-// https://bugs.webkit.org/show_bug.cgi?id=250511
 int
 js_get_value_bigint_uint64 (js_env_t *env, js_value_t *value, uint64_t *result, bool *lossless) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
+    JSValueRef exception = NULL;
 
-  return -1;
+    int64_t number = JSValueToUInt64(env->context, (JSValueRef) value, &exception);
+
+    assert(exception == NULL);
+
+    *result = number;
+
+    return 0;
+  } else {
+    js_throw_error(env, NULL, "Unsupported operation");
+
+    return js__error(env);
+  }
 }
 
 int
@@ -3478,7 +3561,7 @@ js_get_prototype (js_env_t *env, js_value_t *object, js_value_t **result) {
 
 int
 js_get_property_names (js_env_t *env, js_value_t *object, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -3522,7 +3605,7 @@ err:
 
 int
 js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -3543,7 +3626,7 @@ js_get_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t 
 
 int
 js_has_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -3560,7 +3643,7 @@ js_has_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *resul
 
 int
 js_set_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *value) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -3575,7 +3658,7 @@ js_set_property (js_env_t *env, js_value_t *object, js_value_t *key, js_value_t 
 
 int
 js_delete_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -3592,7 +3675,7 @@ js_delete_property (js_env_t *env, js_value_t *object, js_value_t *key, bool *re
 
 int
 js_get_named_property (js_env_t *env, js_value_t *object, const char *name, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
@@ -3617,7 +3700,7 @@ js_get_named_property (js_env_t *env, js_value_t *object, const char *name, js_v
 
 int
 js_has_named_property (js_env_t *env, js_value_t *object, const char *name, bool *result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
@@ -3638,7 +3721,7 @@ js_has_named_property (js_env_t *env, js_value_t *object, const char *name, bool
 
 int
 js_set_named_property (js_env_t *env, js_value_t *object, const char *name, js_value_t *value) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
@@ -3657,7 +3740,7 @@ js_set_named_property (js_env_t *env, js_value_t *object, const char *name, js_v
 
 int
 js_delete_named_property (js_env_t *env, js_value_t *object, const char *name, bool *result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSStringRef ref = JSStringCreateWithUTF8CString(name);
 
@@ -3678,7 +3761,7 @@ js_delete_named_property (js_env_t *env, js_value_t *object, const char *name, b
 
 int
 js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -3699,7 +3782,7 @@ js_get_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t **
 
 int
 js_has_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef key = JSValueMakeNumber(env->context, (double) index);
 
@@ -3718,7 +3801,7 @@ js_has_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result)
 
 int
 js_set_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t *value) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -3733,7 +3816,7 @@ js_set_element (js_env_t *env, js_value_t *object, uint32_t index, js_value_t *v
 
 int
 js_delete_element (js_env_t *env, js_value_t *object, uint32_t index, bool *result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef key = JSValueMakeNumber(env->context, (double) index);
 
@@ -3822,7 +3905,7 @@ int
 js_get_sharedarraybuffer_info (js_env_t *env, js_value_t *sharedarraybuffer, void **data, size_t *len) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
@@ -3957,7 +4040,7 @@ js_get_dataview_info (js_env_t *env, js_value_t *dataview, void **pdata, size_t 
 
 int
 js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -3985,7 +4068,7 @@ js_call_function (js_env_t *env, js_value_t *receiver, js_value_t *function, siz
 
 int
 js_call_function_with_checkpoint (js_env_t *env, js_value_t *receiver, js_value_t *function, size_t argc, js_value_t *const argv[], js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -4009,7 +4092,7 @@ js_call_function_with_checkpoint (js_env_t *env, js_value_t *receiver, js_value_
 
 int
 js_new_instance (js_env_t *env, js_value_t *constructor, size_t argc, js_value_t *const argv[], js_value_t **result) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->depth++;
 
@@ -4038,7 +4121,7 @@ int
 js_create_threadsafe_function (js_env_t *env, js_value_t *function, size_t queue_limit, size_t initial_thread_count, js_finalize_cb finalize_cb, void *finalize_hint, void *context, js_threadsafe_function_cb cb, js_threadsafe_function_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
@@ -4065,19 +4148,45 @@ int
 js_ref_threadsafe_function (js_env_t *env, js_threadsafe_function_t *function) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
 js_unref_threadsafe_function (js_env_t *env, js_threadsafe_function_t *function) {
   js_throw_error(env, NULL, "Unsupported operation");
 
+  return js__error(env);
+}
+
+int
+js_add_teardown_callback (js_env_t *env, js_teardown_cb callback, void *data) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return js__error(env);
+}
+
+int
+js_remove_teardown_callback (js_env_t *env, js_teardown_cb callback, void *data) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return js__error(env);
+}
+
+int
+js_add_deferred_teardown_callback (js_env_t *env, js_deferred_teardown_cb callback, void *data, js_deferred_teardown_t **result) {
+  js_throw_error(env, NULL, "Unsupported operation");
+
+  return js__error(env);
+}
+
+int
+js_finish_deferred_teardown_callback (js_deferred_teardown_t *handle) {
   return -1;
 }
 
 int
 js_throw (js_env_t *env, js_value_t *error) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   env->exception = (JSValueRef) error;
 
@@ -4109,7 +4218,7 @@ js_vformat (char **result, size_t *size, const char *message, va_list args) {
 
 int
 js_throw_error (js_env_t *env, const char *code, const char *message) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef exception = NULL;
 
@@ -4155,7 +4264,7 @@ js_throw_error (js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   size_t len;
   char *formatted;
@@ -4170,7 +4279,7 @@ js_throw_verrorf (js_env_t *env, const char *code, const char *message, va_list 
 
 int
 js_throw_errorf (js_env_t *env, const char *code, const char *message, ...) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   va_list args;
   va_start(args, message);
@@ -4184,7 +4293,7 @@ js_throw_errorf (js_env_t *env, const char *code, const char *message, ...) {
 
 int
 js_throw_type_error (js_env_t *env, const char *code, const char *message) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef exception = NULL;
 
@@ -4240,7 +4349,7 @@ js_throw_type_error (js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_type_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   size_t len;
   char *formatted;
@@ -4255,7 +4364,7 @@ js_throw_type_verrorf (js_env_t *env, const char *code, const char *message, va_
 
 int
 js_throw_type_errorf (js_env_t *env, const char *code, const char *message, ...) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   va_list args;
   va_start(args, message);
@@ -4269,7 +4378,7 @@ js_throw_type_errorf (js_env_t *env, const char *code, const char *message, ...)
 
 int
 js_throw_range_error (js_env_t *env, const char *code, const char *message) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef exception = NULL;
 
@@ -4325,7 +4434,7 @@ js_throw_range_error (js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_range_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   size_t len;
   char *formatted;
@@ -4340,7 +4449,7 @@ js_throw_range_verrorf (js_env_t *env, const char *code, const char *message, va
 
 int
 js_throw_range_errorf (js_env_t *env, const char *code, const char *message, ...) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   va_list args;
   va_start(args, message);
@@ -4354,7 +4463,7 @@ js_throw_range_errorf (js_env_t *env, const char *code, const char *message, ...
 
 int
 js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   JSValueRef exception = NULL;
 
@@ -4410,7 +4519,7 @@ js_throw_syntax_error (js_env_t *env, const char *code, const char *message) {
 
 int
 js_throw_syntax_verrorf (js_env_t *env, const char *code, const char *message, va_list args) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   size_t len;
   char *formatted;
@@ -4425,7 +4534,7 @@ js_throw_syntax_verrorf (js_env_t *env, const char *code, const char *message, v
 
 int
 js_throw_syntax_errorf (js_env_t *env, const char *code, const char *message, ...) {
-  if (env->exception) return -1;
+  if (env->exception) return js__error(env);
 
   va_list args;
   va_start(args, message);
@@ -4509,14 +4618,14 @@ int
 js_create_inspector (js_env_t *env, js_inspector_t **result) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
 js_destroy_inspector (js_env_t *env, js_inspector_t *inspector) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
@@ -4533,14 +4642,14 @@ int
 js_connect_inspector (js_env_t *env, js_inspector_t *inspector) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
 js_send_inspector_request (js_env_t *env, js_inspector_t *inspector, js_value_t *message) {
   js_throw_error(env, NULL, "Unsupported operation");
 
-  return -1;
+  return js__error(env);
 }
 
 int
