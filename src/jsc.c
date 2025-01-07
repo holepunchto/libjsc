@@ -3956,6 +3956,8 @@ js_delete_element(js_env_t *env, js_value_t *object, uint32_t index, bool *resul
 
 int
 js_get_string_view(js_env_t *env, js_value_t *string, js_string_encoding_t *encoding, const void **str, size_t *len, js_string_view_t **result) {
+  // Allow continuing even with a pending exception
+
   JSValueRef exception = NULL;
 
   js_string_view_t *view = malloc(sizeof(js_string_view_t));
@@ -3977,6 +3979,8 @@ js_get_string_view(js_env_t *env, js_value_t *string, js_string_encoding_t *enco
 
 int
 js_release_string_view(js_env_t *env, js_string_view_t *view) {
+  // Allow continuing even with a pending exception
+
   JSStringRelease(view->value);
 
   free(view);
