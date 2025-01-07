@@ -55,7 +55,7 @@ typedef void (*JSWeakMapDestroyedCallback)(JSWeakObjectMapRef map, void *data);
  remain live as JSValueProtect would.
  */
 JS_EXPORT JSWeakObjectMapRef
-JSWeakObjectMapCreate (JSContextRef ctx, void *data, JSWeakMapDestroyedCallback destructor);
+JSWeakObjectMapCreate(JSContextRef ctx, void *data, JSWeakMapDestroyedCallback destructor);
 
 /*!
  @function
@@ -66,7 +66,7 @@ JSWeakObjectMapCreate (JSContextRef ctx, void *data, JSWeakMapDestroyedCallback 
  @param object The user defined object to associate with the key.
  */
 JS_EXPORT void
-JSWeakObjectMapSet (JSContextRef ctx, JSWeakObjectMapRef map, void *key, JSObjectRef object);
+JSWeakObjectMapSet(JSContextRef ctx, JSWeakObjectMapRef map, void *key, JSObjectRef object);
 
 /*!
  @function
@@ -77,7 +77,7 @@ JSWeakObjectMapSet (JSContextRef ctx, JSWeakObjectMapRef map, void *key, JSObjec
  @result Either the live object associated with the provided key, or NULL.
  */
 JS_EXPORT JSObjectRef
-JSWeakObjectMapGet (JSContextRef ctx, JSWeakObjectMapRef map, void *key);
+JSWeakObjectMapGet(JSContextRef ctx, JSWeakObjectMapRef map, void *key);
 
 /*!
  @function
@@ -87,7 +87,7 @@ JSWeakObjectMapGet (JSContextRef ctx, JSWeakObjectMapRef map, void *key);
  @param key The key to remove.
  */
 JS_EXPORT void
-JSWeakObjectMapRemove (JSContextRef ctx, JSWeakObjectMapRef map, void *key);
+JSWeakObjectMapRemove(JSContextRef ctx, JSWeakObjectMapRef map, void *key);
 
 #ifdef __cplusplus
 }

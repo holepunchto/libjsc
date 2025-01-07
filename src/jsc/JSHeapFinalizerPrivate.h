@@ -36,9 +36,9 @@ extern "C" {
 typedef void (*JSHeapFinalizer)(JSContextGroupRef, void *userData);
 
 JS_EXPORT void
-JSContextGroupAddHeapFinalizer (JSContextGroupRef, JSHeapFinalizer, void *userData);
+JSContextGroupAddHeapFinalizer(JSContextGroupRef, JSHeapFinalizer, void *userData);
 JS_EXPORT void
-JSContextGroupRemoveHeapFinalizer (JSContextGroupRef, JSHeapFinalizer, void *userData);
+JSContextGroupRemoveHeapFinalizer(JSContextGroupRef, JSHeapFinalizer, void *userData);
 
 #ifdef __cplusplus
 }

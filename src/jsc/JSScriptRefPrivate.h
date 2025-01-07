@@ -52,7 +52,7 @@ extern "C" {
  buffer as the backing string.  The source string must outlive the global context.
  */
 JS_EXPORT JSScriptRef
-JSScriptCreateReferencingImmortalASCIIText (JSContextGroupRef contextGroup, JSStringRef url, int startingLineNumber, const char *source, size_t length, JSStringRef *errorMessage, int *errorLine);
+JSScriptCreateReferencingImmortalASCIIText(JSContextGroupRef contextGroup, JSStringRef url, int startingLineNumber, const char *source, size_t length, JSStringRef *errorMessage, int *errorLine);
 
 /*!
  @function
@@ -66,7 +66,7 @@ JSScriptCreateReferencingImmortalASCIIText (JSContextGroupRef contextGroup, JSSt
  @result A JSScriptRef for the provided source, or NULL is the source is not a valid JavaScript program.  Ownership follows the Create Rule.
  */
 JS_EXPORT JSScriptRef
-JSScriptCreateFromString (JSContextGroupRef contextGroup, JSStringRef url, int startingLineNumber, JSStringRef source, JSStringRef *errorMessage, int *errorLine);
+JSScriptCreateFromString(JSContextGroupRef contextGroup, JSStringRef url, int startingLineNumber, JSStringRef source, JSStringRef *errorMessage, int *errorLine);
 
 /*!
  @function
@@ -74,7 +74,7 @@ JSScriptCreateFromString (JSContextGroupRef contextGroup, JSStringRef url, int s
  @param script The script to retain.
  */
 JS_EXPORT void
-JSScriptRetain (JSScriptRef script);
+JSScriptRetain(JSScriptRef script);
 
 /*!
  @function
@@ -82,7 +82,7 @@ JSScriptRetain (JSScriptRef script);
  @param script The script to release.
  */
 JS_EXPORT void
-JSScriptRelease (JSScriptRef script);
+JSScriptRelease(JSScriptRef script);
 
 /*!
  @function
@@ -94,7 +94,7 @@ JSScriptRelease (JSScriptRef script);
  @result The JSValue that results from evaluating script, or NULL if an exception is thrown.
  */
 JS_EXPORT JSValueRef
-JSScriptEvaluate (JSContextRef ctx, JSScriptRef script, JSValueRef thisValue, JSValueRef *exception);
+JSScriptEvaluate(JSContextRef ctx, JSScriptRef script, JSValueRef thisValue, JSValueRef *exception);
 
 #ifdef __cplusplus
 }

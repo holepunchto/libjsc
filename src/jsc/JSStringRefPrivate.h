@@ -33,7 +33,7 @@ extern "C" {
 #endif
 
 JS_EXPORT JSStringRef
-JSStringCreateWithCharactersNoCopy (const JSChar *chars, size_t numChars);
+JSStringCreateWithCharactersNoCopy(const JSChar *chars, size_t numChars);
 
 #ifdef __cplusplus
 }

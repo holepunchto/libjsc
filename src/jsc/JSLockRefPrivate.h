@@ -38,7 +38,7 @@ extern "C" {
  @discussion The lock has to be held to perform any interactions with the JSContextRef. This function allows holding the lock across multiple interactions to amortize the cost. This lock is a recursive lock.
  */
 JS_EXPORT void
-JSLock (JSContextRef ctx);
+JSLock(JSContextRef ctx);
 
 /*!
  @function
@@ -47,7 +47,7 @@ JSLock (JSContextRef ctx);
  @discussion Releases the lock that was previously acquired using JSLock.
  */
 JS_EXPORT void
-JSUnlock (JSContextRef ctx);
+JSUnlock(JSContextRef ctx);
 
 #ifdef __cplusplus
 }

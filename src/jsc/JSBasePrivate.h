@@ -44,16 +44,16 @@ garbage collector to collect soon, hoping to reclaim that large non-GC memory
 region.
 */
 JS_EXPORT void
-JSReportExtraMemoryCost (JSContextRef ctx, size_t size) API_AVAILABLE(macos(10.6), ios(7.0));
+JSReportExtraMemoryCost(JSContextRef ctx, size_t size) API_AVAILABLE(macos(10.6), ios(7.0));
 
 JS_EXPORT void
-JSSynchronousGarbageCollectForDebugging (JSContextRef ctx);
+JSSynchronousGarbageCollectForDebugging(JSContextRef ctx);
 
 JS_EXPORT void
-JSSynchronousEdenCollectForDebugging (JSContextRef ctx);
+JSSynchronousEdenCollectForDebugging(JSContextRef ctx);
 
 JS_EXPORT void
-JSDisableGCTimer (void);
+JSDisableGCTimer(void);
 
 #if !defined(__APPLE__) && !defined(WIN32) && !defined(_WIN32)
 /*!
@@ -64,7 +64,7 @@ JSDisableGCTimer (void);
 @discussion Call this function before any of JSC initialization starts. Otherwise, it fails.
 */
 JS_EXPORT bool
-JSConfigureSignalForGC (int signal);
+JSConfigureSignalForGC(int signal);
 #endif
 
 /*!
@@ -83,7 +83,7 @@ JSConfigureSignalForGC (int signal);
  objectTypeCounts: object with GC object types as keys and their current counts as values
 */
 JS_EXPORT JSObjectRef
-JSGetMemoryUsageStatistics (JSContextRef ctx);
+JSGetMemoryUsageStatistics(JSContextRef ctx);
 
 #ifdef __cplusplus
 }

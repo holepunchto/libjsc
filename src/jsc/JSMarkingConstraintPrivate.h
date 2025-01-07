@@ -45,7 +45,7 @@ struct JSMarker {
 typedef void (*JSMarkingConstraint)(JSMarkerRef, void *userData);
 
 JS_EXPORT void
-JSContextGroupAddMarkingConstraint (JSContextGroupRef, JSMarkingConstraint, void *userData);
+JSContextGroupAddMarkingConstraint(JSContextGroupRef, JSMarkingConstraint, void *userData);
 
 #ifdef __cplusplus
 }

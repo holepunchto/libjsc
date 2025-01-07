@@ -45,7 +45,7 @@ extern "C" {
  The default object class does not allocate storage for private data. Only objects created with a non-NULL JSClass can store private properties.
  */
 JS_EXPORT bool
-JSObjectSetPrivateProperty (JSContextRef ctx, JSObjectRef object, JSStringRef propertyName, JSValueRef value);
+JSObjectSetPrivateProperty(JSContextRef ctx, JSObjectRef object, JSStringRef propertyName, JSValueRef value);
 
 /*!
  @function
@@ -56,7 +56,7 @@ JSObjectSetPrivateProperty (JSContextRef ctx, JSObjectRef object, JSStringRef pr
  @result The property's value if object has the property, otherwise NULL.
  */
 JS_EXPORT JSValueRef
-JSObjectGetPrivateProperty (JSContextRef ctx, JSObjectRef object, JSStringRef propertyName);
+JSObjectGetPrivateProperty(JSContextRef ctx, JSObjectRef object, JSStringRef propertyName);
 
 /*!
  @function
@@ -68,12 +68,12 @@ JSObjectGetPrivateProperty (JSContextRef ctx, JSObjectRef object, JSStringRef pr
  @discussion The default object class does not allocate storage for private data. Only objects created with a non-NULL JSClass can store private data.
  */
 JS_EXPORT bool
-JSObjectDeletePrivateProperty (JSContextRef ctx, JSObjectRef object, JSStringRef propertyName);
+JSObjectDeletePrivateProperty(JSContextRef ctx, JSObjectRef object, JSStringRef propertyName);
 
 JS_EXPORT JSObjectRef JSObjectGetProxyTarget(JSObjectRef);
 
 JS_EXPORT JSGlobalContextRef
-JSObjectGetGlobalContext (JSObjectRef object);
+JSObjectGetGlobalContext(JSObjectRef object);
 
 #ifdef __cplusplus
 }

@@ -43,7 +43,7 @@ extern "C" {
 @result A string containing the backtrace
 */
 JS_EXPORT JSStringRef
-JSContextCreateBacktrace (JSContextRef ctx, unsigned maxStackSize) API_AVAILABLE(macos(10.6), ios(7.0));
+JSContextCreateBacktrace(JSContextRef ctx, unsigned maxStackSize) API_AVAILABLE(macos(10.6), ios(7.0));
 
 /*!
 @typedef JSShouldTerminateCallback
@@ -83,7 +83,7 @@ typedef bool (*JSShouldTerminateCallback)(JSContextRef ctx, void *context);
  any scripts.
 */
 JS_EXPORT void
-JSContextGroupSetExecutionTimeLimit (JSContextGroupRef group, double limit, JSShouldTerminateCallback callback, void *context) API_AVAILABLE(macos(10.6), ios(7.0));
+JSContextGroupSetExecutionTimeLimit(JSContextGroupRef group, double limit, JSShouldTerminateCallback callback, void *context) API_AVAILABLE(macos(10.6), ios(7.0));
 
 /*!
 @function
@@ -91,7 +91,7 @@ JSContextGroupSetExecutionTimeLimit (JSContextGroupRef group, double limit, JSSh
 @param group The JavaScript context group that the time limit is cleared on.
 */
 JS_EXPORT void
-JSContextGroupClearExecutionTimeLimit (JSContextGroupRef group) API_AVAILABLE(macos(10.6), ios(7.0));
+JSContextGroupClearExecutionTimeLimit(JSContextGroupRef group) API_AVAILABLE(macos(10.6), ios(7.0));
 
 /*!
 @function
@@ -101,7 +101,7 @@ JSContextGroupClearExecutionTimeLimit (JSContextGroupRef group) API_AVAILABLE(ma
 @discussion Remote inspection is true by default.
 */
 JS_EXPORT bool
-JSGlobalContextGetRemoteInspectionEnabled (JSGlobalContextRef ctx) API_DEPRECATED_WITH_REPLACEMENT("JSGlobalContextIsInspectable", macos(10.10, 13.3), ios(8.0, 16.4));
+JSGlobalContextGetRemoteInspectionEnabled(JSGlobalContextRef ctx) API_DEPRECATED_WITH_REPLACEMENT("JSGlobalContextIsInspectable", macos(10.10, 13.3), ios(8.0, 16.4));
 
 /*!
 @function
@@ -110,7 +110,7 @@ JSGlobalContextGetRemoteInspectionEnabled (JSGlobalContextRef ctx) API_DEPRECATE
 @param enabled The new remote inspection enabled setting for the context.
 */
 JS_EXPORT void
-JSGlobalContextSetRemoteInspectionEnabled (JSGlobalContextRef ctx, bool enabled) API_DEPRECATED_WITH_REPLACEMENT("JSGlobalContextSetInspectable", macos(10.10, 13.3), ios(8.0, 16.4));
+JSGlobalContextSetRemoteInspectionEnabled(JSGlobalContextRef ctx, bool enabled) API_DEPRECATED_WITH_REPLACEMENT("JSGlobalContextSetInspectable", macos(10.10, 13.3), ios(8.0, 16.4));
 
 /*!
 @function
@@ -120,7 +120,7 @@ JSGlobalContextSetRemoteInspectionEnabled (JSGlobalContextRef ctx, bool enabled)
 @discussion This setting is true by default.
 */
 JS_EXPORT bool
-JSGlobalContextGetIncludesNativeCallStackWhenReportingExceptions (JSGlobalContextRef ctx) API_AVAILABLE(macos(10.10), ios(8.0));
+JSGlobalContextGetIncludesNativeCallStackWhenReportingExceptions(JSGlobalContextRef ctx) API_AVAILABLE(macos(10.10), ios(8.0));
 
 /*!
 @function
@@ -129,7 +129,7 @@ JSGlobalContextGetIncludesNativeCallStackWhenReportingExceptions (JSGlobalContex
 @param includesNativeCallStack The new value of the setting for the context.
 */
 JS_EXPORT void
-JSGlobalContextSetIncludesNativeCallStackWhenReportingExceptions (JSGlobalContextRef ctx, bool includesNativeCallStack) API_AVAILABLE(macos(10.10), ios(8.0));
+JSGlobalContextSetIncludesNativeCallStackWhenReportingExceptions(JSGlobalContextRef ctx, bool includesNativeCallStack) API_AVAILABLE(macos(10.10), ios(8.0));
 
 /*!
 @function
@@ -140,7 +140,7 @@ JSGlobalContextSetIncludesNativeCallStackWhenReportingExceptions (JSGlobalContex
 @param exception A pointer to a JSValueRef in which to store an exception, if any. Pass NULL if you do not care to store an exception.
 */
 JS_EXPORT void
-JSGlobalContextSetUnhandledRejectionCallback (JSGlobalContextRef ctx, JSObjectRef function, JSValueRef *exception) API_AVAILABLE(macos(10.15.4), ios(13.4));
+JSGlobalContextSetUnhandledRejectionCallback(JSGlobalContextRef ctx, JSObjectRef function, JSValueRef *exception) API_AVAILABLE(macos(10.15.4), ios(13.4));
 
 /*!
 @function
@@ -150,7 +150,7 @@ JSGlobalContextSetUnhandledRejectionCallback (JSGlobalContextRef ctx, JSObjectRe
 @param message The error message to display when user attempts to call eval (or the Function constructor). Pass NULL when setting enabled to true.
 */
 JS_EXPORT void
-JSGlobalContextSetEvalEnabled (JSGlobalContextRef ctx, bool enabled, JSStringRef message) API_AVAILABLE(macos(12.3), ios(15.4));
+JSGlobalContextSetEvalEnabled(JSGlobalContextRef ctx, bool enabled, JSStringRef message) API_AVAILABLE(macos(12.3), ios(15.4));
 
 #ifdef __cplusplus
 }
