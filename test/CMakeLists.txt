@@ -240,13 +240,7 @@ foreach(test IN LISTS tests)
   target_link_libraries(
     ${test}
     PRIVATE
-      jsc_shared
-  )
-
-  target_include_directories(
-    ${test}
-    PRIVATE
-      $<TARGET_PROPERTY:jsc,INTERFACE_INCLUDE_DIRECTORIES>
+      js_shared
   )
 
   add_test(

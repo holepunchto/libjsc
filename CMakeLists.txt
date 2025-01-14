@@ -2,26 +2,25 @@ cmake_minimum_required(VERSION 3.25)
 
 find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
 
-project(jsc C)
+project(js C)
 
 add_library(v8 INTERFACE)
 add_library(c++ INTERFACE)
+add_library(js OBJECT)
 
 fetch_package("github:holepunchto/libjs" SOURCE_DIR js)
 
-add_library(jsc OBJECT)
-
 set_target_properties(
-  jsc
+  js
   PROPERTIES
   C_STANDARD 99
   POSITION_INDEPENDENT_CODE ON
 )
 
 target_sources(
-  jsc
+  js
   PRIVATE
-    src/jsc.c
+    src/js.c
     src/jsc.h
     src/jsc/JSBasePrivate.h
     src/jsc/JSContextRefPrivate.h
@@ -36,54 +35,59 @@ target_sources(
 )
 
 target_include_directories(
-  jsc
-  PUBLIC
+  js
+  INTERFACE
     include
-    $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
+  PUBLIC
+    ${js}/include
+  PRIVATE
+    $<TARGET_PROPERTY:uv,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:utf,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 target_link_libraries(
-  jsc
+  js
   PUBLIC
     "-framework CoreFoundation"
     "-framework JavaScriptCore"
 )
 
-add_library(jsc_shared SHARED)
+add_library(js_shared SHARED)
 
 set_target_properties(
-  jsc_shared
+  js_shared
   PROPERTIES
-  OUTPUT_NAME jsc
+  OUTPUT_NAME js
 )
 
 target_link_libraries(
-  jsc_shared
+  js_shared
   PUBLIC
-    jsc
     uv
     utf_shared
+  PRIVATE
+    js
 )
 
-add_library(jsc_static STATIC)
+add_library(js_static STATIC)
 
 set_target_properties(
-  jsc_static
+  js_static
   PROPERTIES
-  OUTPUT_NAME jsc
+  OUTPUT_NAME js
   PREFIX lib
 )
 
 target_link_libraries(
-  jsc_static
+  js_static
   PUBLIC
-    jsc
     uv_a
     utf_static
+  PRIVATE
+    js
 )
 
-install(TARGETS jsc_shared jsc_static)
+install(TARGETS js_shared js_static)
 
 if(PROJECT_IS_TOP_LEVEL)
   enable_testing()
