@@ -3763,6 +3763,23 @@ js_has_property(js_env_t *env, js_value_t *object, js_value_t *key, bool *result
 }
 
 int
+js_has_own_property(js_env_t *env, js_value_t *object, js_value_t *key, bool *result) {
+  if (env->exception) return js__error(env);
+
+  env->depth++;
+
+  bool value = JSObjectHasPropertyForKey(env->context, (JSObjectRef) object, (JSValueRef) key, &env->exception);
+
+  env->depth--;
+
+  if (env->exception) return js__propagate_exception(env);
+
+  if (result) *result = value;
+
+  return 0;
+}
+
+int
 js_set_property(js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *value) {
   if (env->exception) return js__error(env);
 
