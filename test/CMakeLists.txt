@@ -240,7 +240,7 @@ foreach(test IN LISTS tests)
   target_link_libraries(
     ${test}
     PRIVATE
-      js_shared
+      js_static
   )
 
   add_test(
@@ -259,7 +259,7 @@ foreach(test IN LISTS tests)
     set_tests_properties(
       ${test}
       PROPERTIES
-      DISABLED True
+      DISABLED TRUE
     )
   endif()
 endforeach()
