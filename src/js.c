@@ -679,28 +679,40 @@ js_escape_handle(js_env_t *env, js_escapable_handle_scope_t *scope, js_value_t *
 
 int
 js_create_context(js_env_t *env, js_context_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
 
 int
 js_destroy_context(js_env_t *env, js_context_t *context) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
 
 int
 js_enter_context(js_env_t *env, js_context_t *context) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
 
 int
 js_exit_context(js_env_t *env, js_context_t *context) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -751,7 +763,10 @@ js_run_script(js_env_t *env, const char *file, size_t len, int offset, js_value_
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_create_module(js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_meta_cb cb, void *data, js_module_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -759,7 +774,10 @@ js_create_module(js_env_t *env, const char *name, size_t len, int offset, js_val
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_create_synthetic_module(js_env_t *env, const char *name, size_t len, js_value_t *const export_names[], size_t names_len, js_module_evaluate_cb cb, void *data, js_module_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -767,7 +785,10 @@ js_create_synthetic_module(js_env_t *env, const char *name, size_t len, js_value
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_delete_module(js_env_t *env, js_module_t *module) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -775,7 +796,10 @@ js_delete_module(js_env_t *env, js_module_t *module) {
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_get_module_name(js_env_t *env, js_module_t *module, const char **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -783,7 +807,10 @@ js_get_module_name(js_env_t *env, js_module_t *module, const char **result) {
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_get_module_namespace(js_env_t *env, js_module_t *module, js_value_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -791,7 +818,10 @@ js_get_module_namespace(js_env_t *env, js_module_t *module, js_value_t **result)
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_set_module_export(js_env_t *env, js_module_t *module, js_value_t *name, js_value_t *value) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -799,7 +829,10 @@ js_set_module_export(js_env_t *env, js_module_t *module, js_value_t *name, js_va
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_instantiate_module(js_env_t *env, js_module_t *module, js_module_resolve_cb cb, void *data) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -807,7 +840,10 @@ js_instantiate_module(js_env_t *env, js_module_t *module, js_module_resolve_cb c
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_run_module(js_env_t *env, js_module_t *module, js_value_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -1476,6 +1512,8 @@ int
 js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   js_type_tag_t *existing = malloc(sizeof(js_type_tag_t));
 
   existing->lower = tag->lower;
@@ -1488,7 +1526,8 @@ js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
   if (JSObjectHasProperty(env->context, (JSObjectRef) object, ref)) {
     JSStringRelease(ref);
 
-    js_throw_errorf(env, NULL, "Object is already type tagged");
+    err = js_throw_errorf(env, NULL, "Object is already type tagged");
+    assert(err == 0);
 
     free(existing);
 
@@ -1804,7 +1843,10 @@ js_create_symbol(js_env_t *env, js_value_t *description, js_value_t **result) {
 
 int
 js_symbol_for(js_env_t *env, const char *description, size_t len, js_value_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -2323,7 +2365,10 @@ js_reject_deferred(js_env_t *env, js_deferred_t *deferred, js_value_t *resolutio
 // https://bugs.webkit.org/show_bug.cgi?id=250554
 int
 js_get_promise_state(js_env_t *env, js_value_t *promise, js_promise_state_t *result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -2331,7 +2376,10 @@ js_get_promise_state(js_env_t *env, js_value_t *promise, js_promise_state_t *res
 // https://bugs.webkit.org/show_bug.cgi?id=250554
 int
 js_get_promise_result(js_env_t *env, js_value_t *promise, js_value_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -2467,7 +2515,10 @@ js_create_external_arraybuffer(js_env_t *env, void *data, size_t len, js_finaliz
 // https://bugs.webkit.org/show_bug.cgi?id=250552
 int
 js_detach_arraybuffer(js_env_t *env, js_value_t *arraybuffer) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -2503,7 +2554,10 @@ js_get_arraybuffer_backing_store(js_env_t *env, js_value_t *arraybuffer, js_arra
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_value_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -2511,7 +2565,10 @@ js_create_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_value_t *
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_sharedarraybuffer_with_backing_store(js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -2519,7 +2576,10 @@ js_create_sharedarraybuffer_with_backing_store(js_env_t *env, js_arraybuffer_bac
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_unsafe_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_value_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -2527,7 +2587,10 @@ js_create_unsafe_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_va
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_get_sharedarraybuffer_backing_store(js_env_t *env, js_value_t *sharedarraybuffer, js_arraybuffer_backing_store_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -3601,7 +3664,10 @@ js_get_value_bigint_int64(js_env_t *env, js_value_t *value, int64_t *result, boo
 
     return 0;
   } else {
-    js_throw_error(env, NULL, "Unsupported operation");
+    int err;
+
+    err = js_throw_error(env, NULL, "Unsupported operation");
+    assert(err == 0);
 
     return js__error(env);
   }
@@ -3620,7 +3686,10 @@ js_get_value_bigint_uint64(js_env_t *env, js_value_t *value, uint64_t *result, b
 
     return 0;
   } else {
-    js_throw_error(env, NULL, "Unsupported operation");
+    int err;
+
+    err = js_throw_error(env, NULL, "Unsupported operation");
+    assert(err == 0);
 
     return js__error(env);
   }
@@ -4215,7 +4284,10 @@ js_get_arraybuffer_info(js_env_t *env, js_value_t *arraybuffer, void **pdata, si
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_get_sharedarraybuffer_info(js_env_t *env, js_value_t *sharedarraybuffer, void **data, size_t *len) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -4431,7 +4503,10 @@ js_new_instance(js_env_t *env, js_value_t *constructor, size_t argc, js_value_t 
 
 int
 js_create_threadsafe_function(js_env_t *env, js_value_t *function, size_t queue_limit, size_t initial_thread_count, js_finalize_cb finalize_cb, void *finalize_hint, void *context, js_threadsafe_function_cb cb, js_threadsafe_function_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -4458,14 +4533,20 @@ js_release_threadsafe_function(js_threadsafe_function_t *function, js_threadsafe
 
 int
 js_ref_threadsafe_function(js_env_t *env, js_threadsafe_function_t *function) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
 
 int
 js_unref_threadsafe_function(js_env_t *env, js_threadsafe_function_t *function) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -4986,21 +5067,30 @@ js_request_garbage_collection(js_env_t *env) {
 
 int
 js_get_heap_statistics(js_env_t *env, js_heap_statistics_t *result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
 
 int
 js_create_inspector(js_env_t *env, js_inspector_t **result) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
 
 int
 js_destroy_inspector(js_env_t *env, js_inspector_t *inspector) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
@@ -5017,14 +5107,20 @@ js_on_inspector_paused(js_env_t *env, js_inspector_t *inspector, js_inspector_pa
 
 int
 js_connect_inspector(js_env_t *env, js_inspector_t *inspector) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
 
 int
 js_send_inspector_request(js_env_t *env, js_inspector_t *inspector, js_value_t *message) {
-  js_throw_error(env, NULL, "Unsupported operation");
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
 
   return js__error(env);
 }
