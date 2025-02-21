@@ -9,6 +9,7 @@ add_library(c++ INTERFACE)
 add_library(js OBJECT)
 
 fetch_package("github:holepunchto/libjs" SOURCE_DIR js)
+fetch_package("github:holepunchto/libintrusive")
 
 set_target_properties(
   js
@@ -43,6 +44,7 @@ target_include_directories(
   PRIVATE
     $<TARGET_PROPERTY:uv,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:utf,INTERFACE_INCLUDE_DIRECTORIES>
+    $<TARGET_PROPERTY:intrusive,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 target_link_libraries(
