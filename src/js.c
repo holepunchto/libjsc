@@ -2515,12 +2515,7 @@ js_create_external_arraybuffer(js_env_t *env, void *data, size_t len, js_finaliz
 // https://bugs.webkit.org/show_bug.cgi?id=250552
 int
 js_detach_arraybuffer(js_env_t *env, js_value_t *arraybuffer) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
-
-  return js__error(env);
+  return 0;
 }
 
 int
