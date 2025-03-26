@@ -2609,6 +2609,7 @@ js__convert_from_typedarray_type(js_typedarray_type_t type) {
   case js_int8array:
     return kJSTypedArrayTypeInt8Array;
   case js_uint8array:
+  default:
     return kJSTypedArrayTypeUint8Array;
   case js_uint8clampedarray:
     return kJSTypedArrayTypeUint8ClampedArray;
@@ -3804,14 +3805,14 @@ js_get_value_date(js_env_t *env, js_value_t *value, double *result) {
 }
 
 int
-js_get_array_length(js_env_t *env, js_value_t *value, uint32_t *result) {
+js_get_array_length(js_env_t *env, js_value_t *array, uint32_t *result) {
   // Allow continuing even with a pending exception
 
   JSValueRef exception = NULL;
 
   JSStringRef ref = JSStringCreateWithUTF8CString("length");
 
-  JSValueRef length = JSObjectGetProperty(env->context, (JSObjectRef) value, ref, &exception);
+  JSValueRef length = JSObjectGetProperty(env->context, (JSObjectRef) array, ref, &exception);
 
   assert(exception == NULL);
 
@@ -3820,6 +3821,64 @@ js_get_array_length(js_env_t *env, js_value_t *value, uint32_t *result) {
   *result = (uint32_t) JSValueToNumber(env->context, length, &exception);
 
   assert(exception == NULL);
+
+  return 0;
+}
+
+int
+js_get_array_elements(js_env_t *env, js_value_t *array, js_value_t **elements, size_t len, size_t offset, uint32_t *result) {
+  if (env->exception) return js__error(env);
+
+  int err;
+
+  uint32_t written = 0;
+
+  env->depth++;
+
+  uint32_t m;
+  err = js_get_array_length(env, array, &m);
+  assert(err == 0);
+
+  for (uint32_t i = 0, n = len, j = offset; i < n && j < m; i++, j++) {
+    JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) array, j, &env->exception);
+
+    if (env->exception) {
+
+      env->depth--;
+      return js__propagate_exception(env);
+    }
+
+    elements[i] = (js_value_t *) value;
+
+    js__attach_to_handle_scope(env, env->scope, value);
+
+    written++;
+  }
+
+  env->depth--;
+
+  if (result) *result = written;
+
+  return 0;
+}
+
+int
+js_set_array_elements(js_env_t *env, js_value_t *array, const js_value_t *elements[], size_t len, size_t offset) {
+  if (env->exception) return js__error(env);
+
+  env->depth++;
+
+  for (uint32_t i = 0, n = len, j = offset; i < n; i++, j++) {
+    JSObjectSetPropertyAtIndex(env->context, (JSObjectRef) array, j, (JSValueRef) elements[i], &env->exception);
+
+    if (env->exception) {
+      env->depth--;
+
+      return js__propagate_exception(env);
+    }
+  }
+
+  env->depth--;
 
   return 0;
 }
