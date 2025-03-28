@@ -4,8 +4,6 @@ find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
 
 project(js C)
 
-add_library(v8 INTERFACE)
-add_library(c++ INTERFACE)
 add_library(js OBJECT)
 
 fetch_package("github:holepunchto/libjs" SOURCE_DIR js)
