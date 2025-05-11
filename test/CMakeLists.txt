@@ -40,6 +40,7 @@ list(APPEND tests
   create-external
   create-external-arraybuffer
   create-external-arraybuffer-with-finalizer
+  create-external-arraybuffer-with-finalizer-detach
   create-external-string-latin1
   create-external-string-latin1-with-finalizer
   create-external-string-utf8
@@ -112,7 +113,9 @@ list(APPEND tests
   get-platform-version
   get-property-missing
   get-typedarray-info-uint16array
+  get-typedarray-info-uint16array-large
   get-typedarray-info-uint8array
+  get-typedarray-info-uint8array-large
   get-typedarray-info-uint8array-with-offset
   get-value-string-utf8
   get-value-string-utf8-length
@@ -229,6 +232,9 @@ list(APPEND skipped_tests
   run-module-double-nested-import
   run-module-in-context
   run-module-throw
+
+  # https://bugs.webkit.org/show_bug.cgi?id=250552
+  create-external-arraybuffer-with-finalizer-detach
 )
 
 foreach(test IN LISTS tests)
