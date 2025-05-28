@@ -869,18 +869,13 @@ js__on_reference_finalize(JSObjectRef external) {
   if (reference) reference->value = NULL;
 }
 
-int
-js_create_reference(js_env_t *env, js_value_t *value, uint32_t count, js_ref_t **result) {
-  // Allow continuing even with a pending exception
-
-  JSValueRef exception = NULL;
-
-  js_ref_t *reference = malloc(sizeof(js_ref_t));
-
-  reference->value = (JSValueRef) value;
-  reference->count = count;
+static inline void
+js__set_weak_reference(js_env_t *env, js_ref_t *reference) {
+  if (reference->value == NULL) return;
 
   if (JSValueIsObject(env->context, reference->value)) {
+    JSValueRef exception = NULL;
+
     JSObjectRef external = JSObjectMake(env->context, env->classes.reference, (void *) reference);
 
     JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
@@ -902,21 +897,19 @@ js_create_reference(js_env_t *env, js_value_t *value, uint32_t count, js_ref_t *
 
     assert(exception == NULL);
 
-    if (reference->count > 0) JSValueProtect(env->context, reference->value);
+    JSValueUnprotect(env->context, reference->value);
   }
-
-  *result = reference;
-
-  return 0;
 }
 
-int
-js_delete_reference(js_env_t *env, js_ref_t *reference) {
-  // Allow continuing even with a pending exception
-
-  JSValueRef exception = NULL;
+static inline void
+js__clear_weak_reference(js_env_t *env, js_ref_t *reference) {
+  if (reference->value == NULL) return;
 
   if (JSValueIsObject(env->context, reference->value)) {
+    JSValueRef exception = NULL;
+
+    JSValueProtect(env->context, reference->value);
+
     JSValueRef external = JSObjectGetPropertyForKey(
       env->context,
       (JSObjectRef) reference->value,
@@ -933,9 +926,35 @@ js_delete_reference(js_env_t *env, js_ref_t *reference) {
     assert(exception == NULL);
 
     JSValueUnprotect(env->context, reference->symbol);
-
-    if (reference->count > 0) JSValueUnprotect(env->context, reference->value);
   }
+}
+
+int
+js_create_reference(js_env_t *env, js_value_t *value, uint32_t count, js_ref_t **result) {
+  // Allow continuing even with a pending exception
+
+  js_ref_t *reference = malloc(sizeof(js_ref_t));
+
+  reference->value = (JSValueRef) value;
+  reference->count = count;
+  reference->symbol = NULL;
+
+  JSValueProtect(env->context, reference->value);
+
+  if (reference->count == 0) js__set_weak_reference(env, reference);
+
+  *result = reference;
+
+  return 0;
+}
+
+int
+js_delete_reference(js_env_t *env, js_ref_t *reference) {
+  // Allow continuing even with a pending exception
+
+  if (reference->count == 0) js__clear_weak_reference(env, reference);
+
+  if (reference->value) JSValueUnprotect(env->context, reference->value);
 
   free(reference);
 
@@ -948,7 +967,7 @@ js_reference_ref(js_env_t *env, js_ref_t *reference, uint32_t *result) {
 
   reference->count++;
 
-  if (reference->count == 1) JSValueProtect(env->context, reference->value);
+  if (reference->count == 1) js__clear_weak_reference(env, reference);
 
   if (result) *result = reference->count;
 
@@ -962,7 +981,7 @@ js_reference_unref(js_env_t *env, js_ref_t *reference, uint32_t *result) {
   if (reference->count > 0) {
     reference->count--;
 
-    if (reference->count == 0) JSValueUnprotect(env->context, reference->value);
+    if (reference->count == 0) js__set_weak_reference(env, reference);
   }
 
   if (result) *result = reference->count;
