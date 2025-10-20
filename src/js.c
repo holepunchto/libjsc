@@ -606,6 +606,11 @@ js_on_dynamic_import(js_env_t *env, js_dynamic_import_cb cb, void *data) {
 }
 
 int
+js_on_dynamic_import_transitional(js_env_t *env, js_dynamic_import_transitional_cb cb, void *data) {
+  return 0;
+}
+
+int
 js_get_env_loop(js_env_t *env, uv_loop_t **result) {
   *result = env->loop;
 
@@ -2334,6 +2339,62 @@ js_create_syntax_error(js_env_t *env, js_value_t *code, js_value_t *message, js_
   js__attach_to_handle_scope(env, env->scope, error);
 
   return 0;
+}
+
+int
+js_create_reference_error(js_env_t *env, js_value_t *code, js_value_t *message, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("ReferenceError");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  JSValueRef argv[] = {(JSValueRef) message};
+
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
+
+  assert(exception == NULL);
+
+  if (code) {
+    JSStringRef ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      (JSValueRef) code,
+      kJSPropertyAttributeNone,
+      &exception
+    );
+
+    assert(exception == NULL);
+
+    JSStringRelease(ref);
+  }
+
+  *result = (js_value_t *) error;
+
+  js__attach_to_handle_scope(env, env->scope, error);
+
+  return 0;
+}
+
+int
+js_get_error_location(js_env_t *env, js_value_t *error, js_error_location_t *result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
 }
 
 int
@@ -5039,7 +5100,7 @@ js_throw_syntax_verrorf(js_env_t *env, const char *code, const char *message, va
   char *formatted;
   js_vformat(&formatted, &len, message, args);
 
-  int err = js_throw_range_error(env, code, formatted);
+  int err = js_throw_syntax_error(env, code, formatted);
 
   free(formatted);
 
@@ -5048,6 +5109,91 @@ js_throw_syntax_verrorf(js_env_t *env, const char *code, const char *message, va
 
 int
 js_throw_syntax_errorf(js_env_t *env, const char *code, const char *message, ...) {
+  if (env->exception) return js__error(env);
+
+  va_list args;
+  va_start(args, message);
+
+  int err = js_throw_syntax_verrorf(env, code, message, args);
+
+  va_end(args);
+
+  return err;
+}
+
+int
+js_throw_reference_error(js_env_t *env, const char *code, const char *message) {
+  if (env->exception) return js__error(env);
+
+  JSValueRef exception = NULL;
+
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("ReferenceError");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  ref = JSStringCreateWithUTF8CString(message);
+
+  JSValueRef argv[] = {JSValueMakeString(env->context, ref)};
+
+  JSStringRelease(ref);
+
+  JSObjectRef error = JSObjectCallAsConstructor(env->context, (JSObjectRef) constructor, 1, argv, &exception);
+
+  assert(exception == NULL);
+
+  if (code) {
+    ref = JSStringCreateWithUTF8CString(code);
+
+    JSValueRef value = JSValueMakeString(env->context, ref);
+
+    JSStringRelease(ref);
+
+    ref = JSStringCreateWithUTF8CString("code");
+
+    JSObjectSetProperty(
+      env->context,
+      error,
+      ref,
+      value,
+      kJSPropertyAttributeNone,
+      &exception
+    );
+
+    assert(exception == NULL);
+
+    JSStringRelease(ref);
+  }
+
+  env->exception = error;
+
+  js__propagate_exception(env);
+
+  return 0;
+}
+
+int
+js_throw_reference_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
+  if (env->exception) return js__error(env);
+
+  size_t len;
+  char *formatted;
+  js_vformat(&formatted, &len, message, args);
+
+  int err = js_throw_reference_error(env, code, formatted);
+
+  free(formatted);
+
+  return err;
+}
+
+int
+js_throw_reference_errorf(js_env_t *env, const char *code, const char *message, ...) {
   if (env->exception) return js__error(env);
 
   va_list args;
@@ -5139,6 +5285,16 @@ js_get_heap_statistics(js_env_t *env, js_heap_statistics_t *result) {
 }
 
 int
+js_get_heap_space_statistics(js_env_t *env, js_heap_space_statistics_t statistics[], size_t len, size_t offset, size_t *result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_create_inspector(js_env_t *env, js_inspector_t **result) {
   int err;
 
@@ -5164,6 +5320,11 @@ js_on_inspector_response(js_env_t *env, js_inspector_t *inspector, js_inspector_
 }
 
 int
+js_on_inspector_response_transitional(js_env_t *env, js_inspector_t *inspector, js_inspector_message_transitional_cb cb, void *data) {
+  return 0;
+}
+
+int
 js_on_inspector_paused(js_env_t *env, js_inspector_t *inspector, js_inspector_paused_cb cb, void *data) {
   return 0;
 }
@@ -5180,6 +5341,16 @@ js_connect_inspector(js_env_t *env, js_inspector_t *inspector) {
 
 int
 js_send_inspector_request(js_env_t *env, js_inspector_t *inspector, js_value_t *message) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_send_inspector_request_transitional(js_env_t *env, js_inspector_t *inspector, const char *message, size_t len) {
   int err;
 
   err = js_throw_error(env, NULL, "Unsupported operation");

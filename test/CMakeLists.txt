@@ -105,10 +105,13 @@ list(APPEND tests
   define-class-with-symbol-property
   define-class-with-value
   dynamic-import
+  dynamic-import-with-promise
   dynamic-import-without-handler
   fatal-exception
   get-arraybuffer-info
   get-dataview-info
+  get-error-location
+  get-heap-space-statistics
   get-platform-identifier
   get-platform-limits
   get-platform-version
@@ -192,6 +195,12 @@ list(APPEND skipped_tests
   inspector
   inspector-pause
 
+  # Not supported
+  get-error-location
+
+  # Not supported
+  get-heap-space-statistics
+
   # Not implemented
   call-threadsafe-function-after-release
   call-threadsafe-function-with-data
@@ -223,6 +232,7 @@ list(APPEND skipped_tests
   # https://bugs.webkit.org/show_bug.cgi?id=261600
   create-module-import-missing
   dynamic-import
+  dynamic-import-with-promise
   dynamic-import-without-handler
   import-meta
   import-meta-throw
