@@ -195,12 +195,6 @@ list(APPEND skipped_tests
   inspector
   inspector-pause
 
-  # Not supported
-  get-error-location
-
-  # Not supported
-  get-heap-space-statistics
-
   # Not implemented
   call-threadsafe-function-after-release
   call-threadsafe-function-with-data

@@ -2389,12 +2389,13 @@ js_create_reference_error(js_env_t *env, js_value_t *code, js_value_t *message, 
 
 int
 js_get_error_location(js_env_t *env, js_value_t *error, js_error_location_t *result) {
-  int err;
+  result->name = (js_value_t *) JSValueMakeUndefined(env->context);
+  result->source = (js_value_t *) JSValueMakeUndefined(env->context);
+  result->line = 0;
+  result->column_start = -1;
+  result->column_end = -1;
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
-
-  return js__error(env);
+  return 0;
 }
 
 int
@@ -5286,12 +5287,9 @@ js_get_heap_statistics(js_env_t *env, js_heap_statistics_t *result) {
 
 int
 js_get_heap_space_statistics(js_env_t *env, js_heap_space_statistics_t statistics[], size_t len, size_t offset, size_t *result) {
-  int err;
+  if (result) *result = 0;
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
-
-  return js__error(env);
+  return 0;
 }
 
 int
