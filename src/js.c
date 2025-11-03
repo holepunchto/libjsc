@@ -2676,6 +2676,17 @@ js_create_unsafe_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_va
 
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
+js_create_external_sharedarraybuffer(js_env_t *env, void *data, size_t len, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+// https://bugs.webkit.org/show_bug.cgi?id=257709
+int
 js_get_sharedarraybuffer_backing_store(js_env_t *env, js_value_t *sharedarraybuffer, js_arraybuffer_backing_store_t **result) {
   int err;
 
@@ -3494,6 +3505,15 @@ js_is_uint32array(js_env_t *env, js_value_t *value, bool *result) {
   assert(exception == NULL);
 
   *result = type == kJSTypedArrayTypeUint32Array;
+
+  return 0;
+}
+
+int
+js_is_float16array(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  *result = false;
 
   return 0;
 }
@@ -5374,6 +5394,26 @@ js_send_inspector_request(js_env_t *env, js_inspector_t *inspector, js_value_t *
 
 int
 js_send_inspector_request_transitional(js_env_t *env, js_inspector_t *inspector, const char *message, size_t len) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_attach_context_to_inspector(js_env_t *env, js_inspector_t *inspector, js_context_t *context, const char *name, size_t len) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_detach_context_from_inspector(js_env_t *env, js_inspector_t *inspector, js_context_t *context) {
   int err;
 
   err = js_throw_error(env, NULL, "Unsupported operation");
