@@ -196,11 +196,11 @@ struct js_threadsafe_function_s {
   js_threadsafe_function_cb cb;
 };
 
-static const char *js_platform_identifier = "javascriptcore";
+static const char *js__platform_identifier = "javascriptcore";
 
-static const char *js_platform_version = NULL;
+static const char *js__platform_version = NULL;
 
-static uv_once_t js_platform_version_guard = UV_ONCE_INIT;
+static uv_once_t js__platform_version_guard = UV_ONCE_INIT;
 
 int
 js_create_platform(uv_loop_t *loop, const js_platform_options_t *options, js_platform_t **result) {
@@ -262,7 +262,7 @@ js_destroy_platform(js_platform_t *platform) {
 
 int
 js_get_platform_identifier(js_platform_t *platform, const char **result) {
-  *result = js_platform_identifier;
+  *result = js__platform_identifier;
 
   return 0;
 }
@@ -285,7 +285,7 @@ js__on_platform_version_init() {
 
   const char *ptr = CFStringGetCStringPtr(version, kCFStringEncodingUTF8);
 
-  if (ptr) js_platform_version = strdup(ptr);
+  if (ptr) js__platform_version = strdup(ptr);
 
   CFRelease(version);
   CFRelease(bundle);
@@ -293,9 +293,9 @@ js__on_platform_version_init() {
 
 int
 js_get_platform_version(js_platform_t *platform, const char **result) {
-  uv_once(&js_platform_version_guard, js__on_platform_version_init);
+  uv_once(&js__platform_version_guard, js__on_platform_version_init);
 
-  *result = js_platform_version;
+  *result = js__platform_version;
 
   return 0;
 }
