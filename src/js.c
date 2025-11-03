@@ -4769,8 +4769,8 @@ js_throw(js_env_t *env, js_value_t *error) {
   return 0;
 }
 
-int
-js_vformat(char **result, size_t *size, const char *message, va_list args) {
+static inline int
+js__vformat(char **result, size_t *size, const char *message, va_list args) {
   va_list args_copy;
   va_copy(args_copy, args);
 
@@ -4842,11 +4842,14 @@ int
 js_throw_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   size_t len;
   char *formatted;
-  js_vformat(&formatted, &len, message, args);
+  err = js__vformat(&formatted, &len, message, args);
+  assert(err == 0);
 
-  int err = js_throw_error(env, code, formatted);
+  err = js_throw_error(env, code, formatted);
 
   free(formatted);
 
@@ -4857,10 +4860,12 @@ int
 js_throw_errorf(js_env_t *env, const char *code, const char *message, ...) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   va_list args;
   va_start(args, message);
 
-  int err = js_throw_verrorf(env, code, message, args);
+  err = js_throw_verrorf(env, code, message, args);
 
   va_end(args);
 
@@ -4927,11 +4932,14 @@ int
 js_throw_type_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   size_t len;
   char *formatted;
-  js_vformat(&formatted, &len, message, args);
+  err = js__vformat(&formatted, &len, message, args);
+  assert(err == 0);
 
-  int err = js_throw_type_error(env, code, formatted);
+  err = js_throw_type_error(env, code, formatted);
 
   free(formatted);
 
@@ -4942,10 +4950,12 @@ int
 js_throw_type_errorf(js_env_t *env, const char *code, const char *message, ...) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   va_list args;
   va_start(args, message);
 
-  int err = js_throw_type_verrorf(env, code, message, args);
+  err = js_throw_type_verrorf(env, code, message, args);
 
   va_end(args);
 
@@ -5012,11 +5022,14 @@ int
 js_throw_range_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   size_t len;
   char *formatted;
-  js_vformat(&formatted, &len, message, args);
+  err = js__vformat(&formatted, &len, message, args);
+  assert(err == 0);
 
-  int err = js_throw_range_error(env, code, formatted);
+  err = js_throw_range_error(env, code, formatted);
 
   free(formatted);
 
@@ -5027,10 +5040,12 @@ int
 js_throw_range_errorf(js_env_t *env, const char *code, const char *message, ...) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   va_list args;
   va_start(args, message);
 
-  int err = js_throw_range_verrorf(env, code, message, args);
+  err = js_throw_range_verrorf(env, code, message, args);
 
   va_end(args);
 
@@ -5097,11 +5112,14 @@ int
 js_throw_syntax_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   size_t len;
   char *formatted;
-  js_vformat(&formatted, &len, message, args);
+  err = js__vformat(&formatted, &len, message, args);
+  assert(err == 0);
 
-  int err = js_throw_syntax_error(env, code, formatted);
+  err = js_throw_syntax_error(env, code, formatted);
 
   free(formatted);
 
@@ -5112,10 +5130,12 @@ int
 js_throw_syntax_errorf(js_env_t *env, const char *code, const char *message, ...) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   va_list args;
   va_start(args, message);
 
-  int err = js_throw_syntax_verrorf(env, code, message, args);
+  err = js_throw_syntax_verrorf(env, code, message, args);
 
   va_end(args);
 
@@ -5182,11 +5202,14 @@ int
 js_throw_reference_verrorf(js_env_t *env, const char *code, const char *message, va_list args) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   size_t len;
   char *formatted;
-  js_vformat(&formatted, &len, message, args);
+  err = js__vformat(&formatted, &len, message, args);
+  assert(err == 0);
 
-  int err = js_throw_reference_error(env, code, formatted);
+  err = js_throw_reference_error(env, code, formatted);
 
   free(formatted);
 
@@ -5197,10 +5220,12 @@ int
 js_throw_reference_errorf(js_env_t *env, const char *code, const char *message, ...) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   va_list args;
   va_start(args, message);
 
-  int err = js_throw_syntax_verrorf(env, code, message, args);
+  err = js_throw_syntax_verrorf(env, code, message, args);
 
   va_end(args);
 
