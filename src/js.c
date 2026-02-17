@@ -1724,6 +1724,16 @@ js_create_bigint_uint64(js_env_t *env, uint64_t value, js_value_t **result) {
 }
 
 int
+js_create_bigint_words(js_env_t *env, int sign, const uint64_t *words, size_t len, js_value_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t **result) {
   // Allow continuing even with a pending exception
 
