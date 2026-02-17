@@ -3958,8 +3958,8 @@ js_get_array_elements(js_env_t *env, js_value_t *array, js_value_t **elements, s
     JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) array, j, &env->exception);
 
     if (env->exception) {
-
       env->depth--;
+
       return js__propagate_exception(env);
     }
 
