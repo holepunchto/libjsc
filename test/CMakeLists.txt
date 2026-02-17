@@ -199,14 +199,6 @@ list(APPEND skipped_tests
   get-error-location
 
   # Not implemented
-  call-threadsafe-function-after-release
-  call-threadsafe-function-with-data
-  create-threadsafe-function
-  create-threadsafe-function-with-callback
-  create-threadsafe-function-with-context
-  create-threadsafe-function-with-finalizer
-
-  # Not implemented
   call-function-in-context
   run-script-in-context
 
@@ -219,12 +211,6 @@ list(APPEND skipped_tests
   # https://bugs.webkit.org/show_bug.cgi?id=250554
   atomics-wait-timeout
   atomics-wait-timeout-notify
-  create-promise-reject
-  create-promise-resolve
-
-  # https://bugs.webkit.org/show_bug.cgi?id=257709
-  create-sharedarraybuffer
-  create-sharedarraybuffer-with-backing-store
 
   # https://bugs.webkit.org/show_bug.cgi?id=261600
   create-module-import-missing
