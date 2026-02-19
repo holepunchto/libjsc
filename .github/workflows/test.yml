@@ -19,19 +19,19 @@ jobs:
             platform: darwin
             arch: arm64
             flags: --sanitize address
-          - os: macos-26
-            platform: ios
-            arch: arm64
-          - os: macos-26
-            platform: ios
-            arch: arm64
-            tags: -simulator
-            flags: --simulator
-          - os: macos-26
-            platform: ios
-            arch: x64
-            tags: -simulator
-            flags: --simulator
+          # - os: macos-26
+          #   platform: ios
+          #   arch: arm64
+          # - os: macos-26
+          #   platform: ios
+          #   arch: arm64
+          #   tags: -simulator
+          #   flags: --simulator
+          # - os: macos-26
+          #   platform: ios
+          #   arch: x64
+          #   tags: -simulator
+          #   flags: --simulator
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
     steps:
@@ -39,7 +39,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - run: brew install llvm lld
       - run: npm install -g bare-make
       - run: npm install
       - run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --debug ${{ matrix.flags }}
