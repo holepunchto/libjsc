@@ -19,15 +19,15 @@ jobs:
             platform: darwin
             arch: arm64
             flags: --sanitize address
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: arm64
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator
-          - os: macos-15
+          - os: macos-14
             platform: ios
             arch: x64
             tags: -simulator
