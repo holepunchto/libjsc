@@ -1681,19 +1681,25 @@ js_create_bigint_int64(js_env_t *env, int64_t value, js_value_t **result) {
 
   JSValueRef exception = NULL;
 
-  JSObjectRef global = JSContextGetGlobalObject(env->context);
+  JSValueRef bigint;
 
-  JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
+  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
+    bigint = JSBigIntCreateWithInt64(env->context, value, &exception);
+  } else {
+    JSObjectRef global = JSContextGetGlobalObject(env->context);
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+    JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
 
-  assert(exception == NULL);
+    JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
 
-  JSStringRelease(ref);
+    assert(exception == NULL);
 
-  JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
+    JSStringRelease(ref);
 
-  JSValueRef bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &exception);
+    JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
+
+    bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &exception);
+  }
 
   assert(exception == NULL);
 
@@ -1710,19 +1716,25 @@ js_create_bigint_uint64(js_env_t *env, uint64_t value, js_value_t **result) {
 
   JSValueRef exception = NULL;
 
-  JSObjectRef global = JSContextGetGlobalObject(env->context);
+  JSValueRef bigint;
 
-  JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
+  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
+    bigint = JSBigIntCreateWithUInt64(env->context, value, &exception);
+  } else {
+    JSObjectRef global = JSContextGetGlobalObject(env->context);
 
-  JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
+    JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
 
-  assert(exception == NULL);
+    JSValueRef constructor = JSObjectGetProperty(env->context, global, ref, &exception);
 
-  JSStringRelease(ref);
+    assert(exception == NULL);
 
-  JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
+    JSStringRelease(ref);
 
-  JSValueRef bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &exception);
+    JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) value)};
+
+    bigint = JSObjectCallAsFunction(env->context, (JSObjectRef) constructor, global, 1, argv, &exception);
+  }
 
   assert(exception == NULL);
 
