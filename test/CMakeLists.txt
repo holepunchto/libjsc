@@ -210,6 +210,9 @@ list(APPEND skipped_tests
   call-function-in-context
   run-script-in-context
 
+  # Depends on GC
+  create-reference-object-weak
+
   # Depends on JIT
   wasm
   wasm-async
