@@ -210,6 +210,7 @@ list(APPEND skipped_tests
   create-reference-object-weak
 
   # Depends on JIT
+  wasm
   wasm-async
   wasm-async-io
   wasm-async-io-multiple
