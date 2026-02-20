@@ -5334,7 +5334,7 @@ js_request_garbage_collection(js_env_t *env) {
   // Allow continuing even with a pending exception
 
   if (env->platform->options.expose_garbage_collection) {
-    JSSynchronousGarbageCollectForDebugging(env->context);
+    JSGarbageCollect(env->context);
   }
 
   return 0;

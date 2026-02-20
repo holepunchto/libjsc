@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,25 +23,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef JSHeapFinalizerPrivate_h
-#define JSHeapFinalizerPrivate_h
+#if JSC_OBJC_API_ENABLED && defined(__OBJC__)
 
-#include <JavaScriptCore/JSBase.h>
-#include <stdbool.h>
+#import <JavaScriptCore/JavaScriptCore.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+@interface JSValue (JSPrivate)
 
-typedef void (*JSHeapFinalizer)(JSContextGroupRef, void *userData);
+// Currently empty. May be used again in the future.
 
-JS_EXPORT void
-JSContextGroupAddHeapFinalizer(JSContextGroupRef, JSHeapFinalizer, void *userData);
-JS_EXPORT void
-JSContextGroupRemoveHeapFinalizer(JSContextGroupRef, JSHeapFinalizer, void *userData);
+@end
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif // JSHeapFinalizerPrivate_h
+#endif // JSC_OBJC_API_ENABLED && defined(__OBJC__)

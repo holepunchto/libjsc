@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Apple Inc.  All rights reserved.
+ * Copyright (C) 2009 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +30,9 @@
 #include <JavaScriptCore/JSValueRef.h>
 #include <JavaScriptCore/WebKitAvailability.h>
 
+#ifndef __cplusplus
 #include <stdbool.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -92,6 +94,34 @@ JSContextGroupSetExecutionTimeLimit(JSContextGroupRef group, double limit, JSSho
 */
 JS_EXPORT void
 JSContextGroupClearExecutionTimeLimit(JSContextGroupRef group) API_AVAILABLE(macos(10.6), ios(7.0));
+
+/*!
+@function
+@abstract Enables sampling profiler.
+@param group The JavaScript context group to start sampling.
+@result The value of the enablement, true if the sampling profiler gets enabled, otherwise false.
+@discussion Remote inspection is true by default.
+*/
+JS_EXPORT bool
+JSContextGroupEnableSamplingProfiler(JSContextGroupRef group) API_AVAILABLE(macos(14.2), ios(17.2));
+
+/*!
+@function
+@abstract Disables sampling profiler.
+@param group The JavaScript context group to stop sampling.
+*/
+JS_EXPORT void
+JSContextGroupDisableSamplingProfiler(JSContextGroupRef group) API_AVAILABLE(macos(14.2), ios(17.2));
+
+/*!
+@function
+@abstract Gets sampling profiler output in JSON form and clears the sampling profiler records.
+@param group The JavaScript context group whose sampling profile output is taken.
+@result The sampling profiler output in JSON form. NULL if sampling profiler is not enabled ever before.
+@discussion Calling this function clears the sampling data accumulated so far.
+*/
+JS_EXPORT JSStringRef
+JSContextGroupTakeSamplesFromSamplingProfiler(JSContextGroupRef group) API_AVAILABLE(macos(14.2), ios(17.2));
 
 /*!
 @function

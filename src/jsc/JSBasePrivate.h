@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc.  All rights reserved.
+ * Copyright (C) 2008 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,12 +45,6 @@ region.
 */
 JS_EXPORT void
 JSReportExtraMemoryCost(JSContextRef ctx, size_t size) API_AVAILABLE(macos(10.6), ios(7.0));
-
-JS_EXPORT void
-JSSynchronousGarbageCollectForDebugging(JSContextRef ctx);
-
-JS_EXPORT void
-JSSynchronousEdenCollectForDebugging(JSContextRef ctx);
 
 JS_EXPORT void
 JSDisableGCTimer(void);
