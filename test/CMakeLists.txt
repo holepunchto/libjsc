@@ -206,10 +206,6 @@ list(APPEND skipped_tests
   create-threadsafe-function-with-context
   create-threadsafe-function-with-finalizer
 
-  # Not implemented
-  call-function-in-context
-  run-script-in-context
-
   # Depends on GC
   create-reference-object-weak
 

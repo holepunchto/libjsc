@@ -114,6 +114,11 @@ struct js_escapable_handle_scope_s {
   js_handle_scope_t *parent;
 };
 
+struct js_context_s {
+  JSGlobalContextRef context;
+  JSGlobalContextRef previous;
+};
+
 struct js_ref_s {
   JSValueRef value;
   JSValueRef symbol;
@@ -698,42 +703,47 @@ js_escape_handle(js_env_t *env, js_escapable_handle_scope_t *scope, js_value_t *
 
 int
 js_create_context(js_env_t *env, js_context_t **result) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_context_t *context = malloc(sizeof(js_context_t));
 
-  return js__error(env);
+  context->context = JSGlobalContextCreateInGroup(env->group, NULL);
+  context->previous = NULL;
+
+  *result = context;
+
+  return 0;
 }
 
 int
 js_destroy_context(js_env_t *env, js_context_t *context) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  free(context);
 
-  return js__error(env);
+  return 0;
 }
 
 int
 js_enter_context(js_env_t *env, js_context_t *context) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  context->previous = env->context;
 
-  return js__error(env);
+  env->context = context->context;
+
+  return 0;
 }
 
 int
 js_exit_context(js_env_t *env, js_context_t *context) {
-  int err;
+  // Allow continuing even with a pending exception
 
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  env->context = context->previous;
 
-  return js__error(env);
+  context->previous = NULL;
+
+  return 0;
 }
 
 int
