@@ -198,14 +198,6 @@ list(APPEND skipped_tests
   # Not supported
   get-error-location
 
-  # Not implemented
-  call-threadsafe-function-after-release
-  call-threadsafe-function-with-data
-  create-threadsafe-function
-  create-threadsafe-function-with-callback
-  create-threadsafe-function-with-context
-  create-threadsafe-function-with-finalizer
-
   # Depends on GC
   create-reference-object-weak
 
