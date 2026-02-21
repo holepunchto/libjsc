@@ -4911,6 +4911,14 @@ js_create_threadsafe_function(js_env_t *env, js_value_t *function, size_t queue_
   atomic_init(&threadsafe_function->state, js_threadsafe_function_idle);
   atomic_init(&threadsafe_function->thread_count, initial_thread_count);
 
+  if (function) {
+    threadsafe_function->function = (JSObjectRef) function;
+
+    JSValueProtect(env->context, threadsafe_function->function);
+  } else {
+    threadsafe_function->function = NULL;
+  }
+
   err = uv_async_init(env->loop, &threadsafe_function->async, js__on_threadsafe_function_async);
   assert(err == 0);
 
@@ -4927,10 +4935,6 @@ js_create_threadsafe_function(js_env_t *env, js_value_t *function, size_t queue_
 
   err = uv_mutex_init(&queue->lock);
   assert(err == 0);
-
-  if (function) {
-    JSValueProtect(env->context, threadsafe_function->function = (JSObjectRef) function);
-  }
 
   *result = threadsafe_function;
 
