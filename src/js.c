@@ -79,6 +79,7 @@ struct js_env_s {
 
   int64_t external_memory;
 
+  bool terminated;
   bool destroying;
 
   js_teardown_queue_t teardown_queue;
@@ -331,6 +332,12 @@ static void
 js__on_uncaught_exception(js_env_t *env, js_value_t *error) {
   int err;
 
+  if (env->terminated) {
+    env->terminated = false;
+
+    return;
+  }
+
   if (env->callbacks.uncaught_exception) {
     js_handle_scope_t *scope;
     err = js_open_handle_scope(env, &scope);
@@ -404,6 +411,15 @@ js__on_delegate_get_property_names(JSContextRef context, JSObjectRef object, JSP
 
 static void
 js__on_delegate_finalize(JSObjectRef object);
+
+static inline bool
+js__on_execution_time_limit(JSContextRef context, void *data) {
+  js_env_t *env = data;
+
+  env->terminated = true;
+
+  return true;
+}
 
 static inline void
 js__reset_execution_time_limit(js_env_t *env) {
@@ -489,6 +505,7 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
 
   env->external_memory = 0;
 
+  env->terminated = false;
   env->destroying = false;
 
   intrusive_list_init(&env->teardown_queue.tasks);
@@ -5624,7 +5641,7 @@ int
 js_terminate_execution(js_env_t *env) {
   // Allow continuing even with a pending exception
 
-  JSContextGroupSetExecutionTimeLimit(env->group, 0, NULL, NULL);
+  JSContextGroupSetExecutionTimeLimit(env->group, 0, js__on_execution_time_limit, env);
 
   return 0;
 }
