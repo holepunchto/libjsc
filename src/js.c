@@ -448,6 +448,23 @@ js__propagate_exception(js_env_t *env) {
   return js__error(env);
 }
 
+static inline void
+js__clear_termination_exception(js_env_t *env) {
+  if (env->depth == 0 && env->terminated) {
+    JSValueRef error = env->exception;
+
+    env->exception = NULL;
+
+    js__reset_execution_time_limit(env);
+
+    JSStringRef noop = JSStringCreateWithUTF8CString("");
+
+    JSEvaluateScript(env->context, noop, NULL, NULL, 1, NULL);
+
+    JSStringRelease(noop);
+  }
+}
+
 static void
 js__on_handle_close(uv_handle_t *handle) {
   js_env_t *env = (js_env_t *) handle->data;
@@ -798,6 +815,7 @@ js_run_script(js_env_t *env, const char *file, size_t len, int offset, js_value_
   JSStringRelease(url);
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -4083,6 +4101,7 @@ js_get_property_names(js_env_t *env, js_value_t *object, js_value_t **result) {
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   size_t len = JSPropertyNameArrayGetCount(properties);
 
@@ -4139,6 +4158,7 @@ js_get_property(js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -4160,6 +4180,7 @@ js_has_property(js_env_t *env, js_value_t *object, js_value_t *key, bool *result
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) *result = value;
 
@@ -4177,6 +4198,7 @@ js_has_own_property(js_env_t *env, js_value_t *object, js_value_t *key, bool *re
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) *result = value;
 
@@ -4194,6 +4216,7 @@ js_set_property(js_env_t *env, js_value_t *object, js_value_t *key, js_value_t *
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   return 0;
 }
@@ -4209,6 +4232,7 @@ js_delete_property(js_env_t *env, js_value_t *object, js_value_t *key, bool *res
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) *result = value;
 
@@ -4230,6 +4254,7 @@ js_get_named_property(js_env_t *env, js_value_t *object, const char *name, js_va
   JSStringRelease(ref);
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -4255,6 +4280,7 @@ js_has_named_property(js_env_t *env, js_value_t *object, const char *name, bool 
   JSStringRelease(ref);
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) *result = value;
 
@@ -4276,6 +4302,7 @@ js_set_named_property(js_env_t *env, js_value_t *object, const char *name, js_va
   JSStringRelease(ref);
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   return 0;
 }
@@ -4295,6 +4322,7 @@ js_delete_named_property(js_env_t *env, js_value_t *object, const char *name, bo
   JSStringRelease(ref);
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) *result = value;
 
@@ -4312,6 +4340,7 @@ js_get_element(js_env_t *env, js_value_t *object, uint32_t index, js_value_t **r
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -4335,6 +4364,7 @@ js_has_element(js_env_t *env, js_value_t *object, uint32_t index, bool *result) 
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) *result = value;
 
@@ -4352,6 +4382,7 @@ js_set_element(js_env_t *env, js_value_t *object, uint32_t index, js_value_t *va
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   return 0;
 }
@@ -4369,6 +4400,7 @@ js_delete_element(js_env_t *env, js_value_t *object, uint32_t index, bool *resul
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) *result = value;
 
@@ -4646,6 +4678,7 @@ js_call_function(js_env_t *env, js_value_t *receiver, js_value_t *function, size
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
@@ -4674,6 +4707,7 @@ js_call_function_with_checkpoint(js_env_t *env, js_value_t *receiver, js_value_t
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) *result = (js_value_t *) value;
 
@@ -4697,6 +4731,7 @@ js_new_instance(js_env_t *env, js_value_t *constructor, size_t argc, js_value_t 
   env->depth--;
 
   if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
 
   if (result) {
     *result = (js_value_t *) value;
