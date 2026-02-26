@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.0)
 
 find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
 
-project(js C OBJC)
+project(js C)
 
 add_library(js OBJECT)
 
@@ -19,7 +19,7 @@ set_target_properties(
 target_sources(
   js
   PRIVATE
-    src/js.m
+    src/js.c
     src/jsc.h
     src/jsc/JSBasePrivate.h
     src/jsc/JSContextRefPrivate.h
