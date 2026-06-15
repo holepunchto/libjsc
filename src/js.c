@@ -254,7 +254,7 @@ js_create_platform(uv_loop_t *loop, const js_platform_options_t *options, js_pla
   js_platform_t *platform = malloc(sizeof(js_platform_t));
 
   platform->loop = loop;
-  platform->options = options ? *options : (js_platform_options_t) {};
+  platform->options = options ? *options : (js_platform_options_t){};
 
   *result = platform;
 
@@ -533,35 +533,35 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
   env->callbacks.unhandled_rejection = NULL;
   env->callbacks.unhandled_rejection_data = NULL;
 
-  env->classes.reference = JSClassCreate(&(JSClassDefinition) {
+  env->classes.reference = JSClassCreate(&(JSClassDefinition){
     .finalize = js__on_reference_finalize,
   });
 
-  env->classes.wrap = JSClassCreate(&(JSClassDefinition) {
+  env->classes.wrap = JSClassCreate(&(JSClassDefinition){
     .finalize = js__on_wrap_finalize,
   });
 
-  env->classes.finalizer = JSClassCreate(&(JSClassDefinition) {
+  env->classes.finalizer = JSClassCreate(&(JSClassDefinition){
     .finalize = js__on_finalizer_finalize,
   });
 
-  env->classes.type_tag = JSClassCreate(&(JSClassDefinition) {
+  env->classes.type_tag = JSClassCreate(&(JSClassDefinition){
     .finalize = js__on_type_tag_finalize,
   });
 
-  env->classes.function = JSClassCreate(&(JSClassDefinition) {
+  env->classes.function = JSClassCreate(&(JSClassDefinition){
     .finalize = js__on_function_finalize,
   });
 
-  env->classes.external = JSClassCreate(&(JSClassDefinition) {
+  env->classes.external = JSClassCreate(&(JSClassDefinition){
     .finalize = js__on_external_finalize,
   });
 
-  env->classes.constructor = JSClassCreate(&(JSClassDefinition) {
+  env->classes.constructor = JSClassCreate(&(JSClassDefinition){
     .finalize = js__on_constructor_finalize,
   });
 
-  env->classes.delegate = JSClassCreate(&(JSClassDefinition) {
+  env->classes.delegate = JSClassCreate(&(JSClassDefinition){
     .getProperty = js__on_delegate_get_property,
     .setProperty = js__on_delegate_set_property,
     .deleteProperty = js__on_delegate_delete_property,
@@ -3842,6 +3842,17 @@ js_get_value_bigint_int64(js_env_t *env, js_value_t *value, int64_t *result, boo
 
     *result = number;
 
+    // The conversion truncates the BigInt to 64 bits, so it is lossless only
+    // when reconstructing a BigInt from the truncated result yields a value
+    // that is strictly equal to the original.
+    if (lossless != NULL) {
+      JSValueRef roundtrip = JSBigIntCreateWithInt64(env->context, number, &exception);
+
+      assert(exception == NULL);
+
+      *lossless = JSValueIsStrictEqual(env->context, (JSValueRef) value, roundtrip);
+    }
+
     return 0;
   } else {
     int err;
@@ -3858,11 +3869,22 @@ js_get_value_bigint_uint64(js_env_t *env, js_value_t *value, uint64_t *result, b
   if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
     JSValueRef exception = NULL;
 
-    int64_t number = JSValueToUInt64(env->context, (JSValueRef) value, &exception);
+    uint64_t number = JSValueToUInt64(env->context, (JSValueRef) value, &exception);
 
     assert(exception == NULL);
 
     *result = number;
+
+    // The conversion truncates the BigInt to 64 bits, so it is lossless only
+    // when reconstructing a BigInt from the truncated result yields a value
+    // that is strictly equal to the original.
+    if (lossless != NULL) {
+      JSValueRef roundtrip = JSBigIntCreateWithUInt64(env->context, number, &exception);
+
+      assert(exception == NULL);
+
+      *lossless = JSValueIsStrictEqual(env->context, (JSValueRef) value, roundtrip);
+    }
 
     return 0;
   } else {
@@ -5705,6 +5727,26 @@ js_request_garbage_collection(js_env_t *env) {
   }
 
   return 0;
+}
+
+int
+js_enable_garbage_collection_tracking(js_env_t *env, const js_garbage_collection_tracking_options_t *options, void *data, js_garbage_collection_tracking_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_disable_garbage_collection_tracking(js_env_t *env, js_garbage_collection_tracking_t *tracking) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
 }
 
 int
