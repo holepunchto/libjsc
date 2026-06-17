@@ -647,11 +647,6 @@ js_on_dynamic_import(js_env_t *env, js_dynamic_import_cb cb, void *data) {
 }
 
 int
-js_on_dynamic_import_transitional(js_env_t *env, js_dynamic_import_cb cb, void *data) {
-  return 0;
-}
-
-int
 js_get_env_loop(js_env_t *env, uv_loop_t **result) {
   *result = env->loop;
 
@@ -5792,11 +5787,6 @@ js_on_inspector_response(js_env_t *env, js_inspector_t *inspector, js_inspector_
 }
 
 int
-js_on_inspector_response_transitional(js_env_t *env, js_inspector_t *inspector, js_inspector_message_cb cb, void *data) {
-  return 0;
-}
-
-int
 js_on_inspector_paused(js_env_t *env, js_inspector_t *inspector, js_inspector_paused_cb cb, void *data) {
   return 0;
 }
@@ -5813,16 +5803,6 @@ js_connect_inspector(js_env_t *env, js_inspector_t *inspector) {
 
 int
 js_send_inspector_request(js_env_t *env, js_inspector_t *inspector, const char *message, size_t len) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
-
-  return js__error(env);
-}
-
-int
-js_send_inspector_request_transitional(js_env_t *env, js_inspector_t *inspector, const char *message, size_t len) {
   int err;
 
   err = js_throw_error(env, NULL, "Unsupported operation");
