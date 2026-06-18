@@ -77,6 +77,9 @@ struct js_env_s {
   JSValueRef exception;
   JSObjectRef bindings;
 
+  JSValueRef default_module_id;
+  JSValueRef function_id_key;
+
   int64_t external_memory;
 
   bool terminated;
@@ -476,6 +479,10 @@ js__on_handle_close(uv_handle_t *handle) {
 
 static void
 js__close_env(js_env_t *env) {
+  if (env->default_module_id) JSValueUnprotect(env->context, env->default_module_id);
+
+  JSValueUnprotect(env->context, env->function_id_key);
+
   JSClassRelease(env->classes.reference);
   JSClassRelease(env->classes.wrap);
   JSClassRelease(env->classes.finalizer);
@@ -519,6 +526,16 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
   env->context = context;
   env->exception = NULL;
   env->bindings = JSObjectMake(context, NULL, NULL);
+
+  env->default_module_id = NULL;
+
+  JSStringRef function_id_key = JSStringCreateWithUTF8CString("__function_id");
+
+  env->function_id_key = JSValueMakeSymbol(context, function_id_key);
+
+  JSStringRelease(function_id_key);
+
+  JSValueProtect(context, env->function_id_key);
 
   env->external_memory = 0;
 
@@ -863,6 +880,48 @@ js_get_module_name(js_env_t *env, js_module_t *module, const char **result) {
   assert(err == 0);
 
   return js__error(env);
+}
+
+// Returns the identifier shared by all compilation units that do not carry one
+// of their own, such as scripts run with `js_run_script()`. The identifier is
+// created lazily and remains stable for the lifetime of the environment.
+static inline JSValueRef
+js__default_module_id(js_env_t *env) {
+  if (env->default_module_id == NULL) {
+    JSStringRef description = JSStringCreateWithUTF8CString("module");
+
+    env->default_module_id = JSValueMakeSymbol(env->context, description);
+
+    JSStringRelease(description);
+
+    JSValueProtect(env->context, env->default_module_id);
+  }
+
+  return env->default_module_id;
+}
+
+// https://bugs.webkit.org/show_bug.cgi?id=261600
+int
+js_get_module_id(js_env_t *env, js_module_t *module, js_value_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_get_default_module_id(js_env_t *env, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef id = js__default_module_id(env);
+
+  *result = (js_value_t *) id;
+
+  js__attach_to_handle_scope(env, env->scope, id);
+
+  return 0;
 }
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
@@ -2112,6 +2171,22 @@ js_create_function_with_source(js_env_t *env, const char *name, size_t name_len,
 
   JSObjectRef function = JSObjectMakeFunction(env->context, name_ref, args_len, arg_refs, source_ref, file_ref, offset, &env->exception);
 
+  if (env->exception == NULL) {
+    // Mint a unique identifier for the function and stash it on the function so
+    // it can be recovered as the referrer of any dynamic import().
+
+    JSValueRef id = JSValueMakeSymbol(env->context, file_ref);
+
+    JSObjectSetPropertyForKey(
+      env->context,
+      function,
+      env->function_id_key,
+      id,
+      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+      &env->exception
+    );
+  }
+
   if (name_ref) JSStringRelease(name_ref);
   if (file_ref) JSStringRelease(file_ref);
 
@@ -2133,6 +2208,30 @@ js_create_function_with_source(js_env_t *env, const char *name, size_t name_len,
 int
 js_create_typed_function(js_env_t *env, const char *name, size_t len, js_function_cb cb, const js_callback_signature_t *signature, const void *address, void *data, js_value_t **result) {
   return js_create_function(env, name, len, cb, data, result);
+}
+
+int
+js_get_function_id(js_env_t *env, js_value_t *function, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  // Recover the identifier stamped onto the function at creation time.
+  // Functions not compiled with `js_create_function_with_source()` carry no
+  // identifier of their own and are attributed to the environment's default
+  // identifier.
+
+  JSValueRef exception = NULL;
+
+  JSValueRef id = JSObjectGetPropertyForKey(env->context, (JSObjectRef) function, env->function_id_key, &exception);
+
+  assert(exception == NULL);
+
+  if (!JSValueIsSymbol(env->context, id)) id = js__default_module_id(env);
+
+  *result = (js_value_t *) id;
+
+  js__attach_to_handle_scope(env, env->scope, id);
+
+  return 0;
 }
 
 int
