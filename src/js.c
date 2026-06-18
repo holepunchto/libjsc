@@ -123,6 +123,11 @@ struct js_context_s {
   JSGlobalContextRef previous;
 };
 
+struct js_script_s {
+  JSScriptRef script;
+  JSValueRef id;
+};
+
 struct js_ref_s {
   JSValueRef value;
   JSValueRef symbol;
@@ -834,6 +839,117 @@ js_run_script(js_env_t *env, const char *file, size_t len, int offset, js_value_
 
     js__attach_to_handle_scope(env, env->scope, value);
   }
+
+  return 0;
+}
+
+int
+js_prepare_script(js_env_t *env, const char *file, size_t len, int offset, js_value_t *source, js_script_t **result) {
+  if (env->exception) return js__error(env);
+
+  int err;
+
+  if (file == NULL) file = "";
+
+  JSStringRef url = JSStringCreateWithUTF8CString(file);
+
+  JSStringRef source_ref = JSValueToStringCopy(env->context, (JSValueRef) source, NULL);
+
+  JSStringRef error_message = NULL;
+  int error_line = 0;
+
+  // Compile to a reusable script reference that can be evaluated later with
+  // `js_run_prepared_script()`.
+
+  JSScriptRef compiled = JSScriptCreateFromString(env->group, url, offset + 1, source_ref, &error_message, &error_line);
+
+  JSStringRelease(source_ref);
+
+  if (compiled == NULL) {
+    if (error_message) {
+      size_t size = JSStringGetMaximumUTF8CStringSize(error_message);
+
+      char *message = malloc(size);
+
+      JSStringGetUTF8CString(error_message, message, size);
+
+      err = js_throw_error(env, NULL, message);
+      assert(err == 0);
+
+      free(message);
+
+      JSStringRelease(error_message);
+    } else {
+      err = js_throw_error(env, NULL, "Could not compile script");
+      assert(err == 0);
+    }
+
+    JSStringRelease(url);
+
+    return js__error(env);
+  }
+
+  // Mint a unique identifier for the script so it can be recovered as the
+  // referrer of any dynamic import().
+
+  JSValueRef id = JSValueMakeSymbol(env->context, url);
+
+  JSValueProtect(env->context, id);
+
+  JSStringRelease(url);
+
+  js_script_t *script = malloc(sizeof(js_script_t));
+
+  script->script = compiled;
+  script->id = id;
+
+  *result = script;
+
+  return 0;
+}
+
+int
+js_run_prepared_script(js_env_t *env, js_script_t *script, js_value_t **result) {
+  if (env->exception) return js__error(env);
+
+  env->depth++;
+
+  JSValueRef value = JSScriptEvaluate(env->context, script->script, NULL, &env->exception);
+
+  env->depth--;
+
+  if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
+
+  if (result) {
+    *result = (js_value_t *) value;
+
+    js__attach_to_handle_scope(env, env->scope, value);
+  }
+
+  return 0;
+}
+
+int
+js_delete_script(js_env_t *env, js_script_t *script) {
+  // Allow continuing even with a pending exception
+
+  JSValueUnprotect(env->context, script->id);
+
+  JSScriptRelease(script->script);
+
+  free(script);
+
+  return 0;
+}
+
+int
+js_get_script_id(js_env_t *env, js_script_t *script, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  *result = (js_value_t *) script->id;
+
+  js__attach_to_handle_scope(env, env->scope, script->id);
 
   return 0;
 }
