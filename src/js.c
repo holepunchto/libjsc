@@ -126,6 +126,7 @@ struct js_context_s {
 struct js_script_s {
   JSScriptRef script;
   JSValueRef id;
+  char *name;
 };
 
 struct js_ref_s {
@@ -902,6 +903,7 @@ js_prepare_script(js_env_t *env, const char *file, size_t len, int offset, js_va
 
   script->script = compiled;
   script->id = id;
+  script->name = strdup(file);
 
   *result = script;
 
@@ -938,7 +940,17 @@ js_delete_script(js_env_t *env, js_script_t *script) {
 
   JSScriptRelease(script->script);
 
+  free(script->name);
   free(script);
+
+  return 0;
+}
+
+int
+js_get_script_name(js_env_t *env, js_script_t *script, const char **result) {
+  // Allow continuing even with a pending exception
+
+  *result = script->name;
 
   return 0;
 }
