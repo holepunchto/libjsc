@@ -123,6 +123,11 @@ list(APPEND tests
   delete-property
   dynamic-import
   dynamic-import-with-promise
+  dynamic-import-with-referrer
+  dynamic-import-with-referrer-function
+  dynamic-import-with-referrer-multiple-scripts
+  dynamic-import-with-referrer-prepared-and-script
+  dynamic-import-with-referrer-script
   dynamic-import-without-handler
   escapable-handle-scope
   fatal-exception
@@ -202,6 +207,14 @@ list(APPEND tests
   is-weak-set
   many-large-allocs
   many-small-allocs
+  prepare-script
+  prepare-script-id
+  prepare-script-ignore-return
+  prepare-script-in-context
+  prepare-script-multiple-contexts
+  prepare-script-run-multiple
+  prepare-script-syntax-error
+  prepare-script-throw
   promise-rejection
   promise-rejection-unhandled
   promise-rejection-unhandled-reentrant
@@ -334,6 +347,11 @@ list(APPEND skipped_tests
   create-module-import-missing
   dynamic-import
   dynamic-import-with-promise
+  dynamic-import-with-referrer
+  dynamic-import-with-referrer-function
+  dynamic-import-with-referrer-multiple-scripts
+  dynamic-import-with-referrer-prepared-and-script
+  dynamic-import-with-referrer-script
   dynamic-import-without-handler
   import-meta
   import-meta-throw
