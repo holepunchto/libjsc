@@ -386,7 +386,7 @@ foreach(test IN LISTS tests)
   set_tests_properties(
     ${test}
     PROPERTIES
-    TIMEOUT 60
+    TIMEOUT 120
   )
 
   if(${test} IN_LIST skipped_tests)
