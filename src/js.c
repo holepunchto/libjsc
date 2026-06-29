@@ -2168,6 +2168,25 @@ js_create_object_with_prototype(js_env_t *env, js_value_t *prototype, js_value_t
   return 0;
 }
 
+int
+js_create_object_with_properties(js_env_t *env, js_value_t *prototype, js_value_t *const property_names[], js_value_t *const property_values[], size_t property_count, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSObjectRef object = JSObjectMake(env->context, NULL, NULL);
+
+  JSObjectSetPrototype(env->context, object, (JSValueRef) prototype);
+
+  for (size_t i = 0; i < property_count; i++) {
+    JSObjectSetPropertyForKey(env->context, object, (JSValueRef) property_names[i], (JSValueRef) property_values[i], kJSPropertyAttributeNone, NULL);
+  }
+
+  *result = (js_value_t *) object;
+
+  js__attach_to_handle_scope(env, env->scope, object);
+
+  return 0;
+}
+
 static void
 js__on_function_finalize(JSObjectRef external) {
   js_callback_t *callback = (js_callback_t *) JSObjectGetPrivate(external);
