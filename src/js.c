@@ -2153,6 +2153,21 @@ js_create_object(js_env_t *env, js_value_t **result) {
   return 0;
 }
 
+int
+js_create_object_with_prototype(js_env_t *env, js_value_t *prototype, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSObjectRef object = JSObjectMake(env->context, NULL, NULL);
+
+  JSObjectSetPrototype(env->context, object, (JSValueRef) prototype);
+
+  *result = (js_value_t *) object;
+
+  js__attach_to_handle_scope(env, env->scope, object);
+
+  return 0;
+}
+
 static void
 js__on_function_finalize(JSObjectRef external) {
   js_callback_t *callback = (js_callback_t *) JSObjectGetPrivate(external);
@@ -4330,6 +4345,15 @@ js_get_prototype(js_env_t *env, js_value_t *object, js_value_t **result) {
   *result = (js_value_t *) prototype;
 
   js__attach_to_handle_scope(env, env->scope, prototype);
+
+  return 0;
+}
+
+int
+js_set_prototype(js_env_t *env, js_value_t *object, js_value_t *prototype) {
+  if (env->exception) return js__error(env);
+
+  JSObjectSetPrototype(env->context, (JSObjectRef) object, (JSValueRef) prototype);
 
   return 0;
 }
