@@ -4965,7 +4965,7 @@ js_call_function_with_checkpoint(js_env_t *env, js_value_t *receiver, js_value_t
   return 0;
 }
 
-static inline int
+static inline void
 js__queue_microtask(js_env_t *env, js_value_t *function) {
   JSValueRef exception = NULL;
 
@@ -5004,15 +5004,15 @@ js__queue_microtask(js_env_t *env, js_value_t *function) {
   JSObjectCallAsFunction(env->context, then, promise, 1, argv, &exception);
 
   assert(exception == NULL);
-
-  return 0;
 }
 
 int
 js_queue_microtask(js_env_t *env, js_value_t *function) {
-  if (env->exception) return js__error(env);
+  // Allow continuing even with a pending exception
 
-  return js__queue_microtask(env, function);
+  js__queue_microtask(env, function);
+
+  return 0;
 }
 
 static js_value_t *
@@ -5032,7 +5032,7 @@ js__on_microtask(js_env_t *env, js_callback_info_t *info) {
 
 int
 js_queue_microtask_with_callback(js_env_t *env, js_task_cb cb, void *data) {
-  if (env->exception) return js__error(env);
+  // Allow continuing even with a pending exception
 
   int err;
 
@@ -5044,14 +5044,11 @@ js_queue_microtask_with_callback(js_env_t *env, js_task_cb cb, void *data) {
 
   js_value_t *function;
   err = js_create_function(env, "microtask", -1, js__on_microtask, (void *) task, &function);
+  assert(err == 0);
 
-  if (err < 0) {
-    free(task);
+  js__queue_microtask(env, function);
 
-    return err;
-  }
-
-  return js__queue_microtask(env, function);
+  return 0;
 }
 
 int
