@@ -20,6 +20,7 @@
 #include "jsc.h"
 
 typedef struct js_callback_s js_callback_t;
+typedef struct js_microtask_s js_microtask_t;
 typedef struct js_finalizer_s js_finalizer_t;
 typedef struct js_finalizer_list_s js_finalizer_list_t;
 typedef struct js_delegate_s js_delegate_t;
@@ -167,6 +168,12 @@ struct js_delegate_s {
 struct js_callback_s {
   js_env_t *env;
   js_function_cb cb;
+  void *data;
+};
+
+struct js_microtask_s {
+  js_env_t *env;
+  js_task_cb cb;
   void *data;
 };
 
@@ -4956,6 +4963,95 @@ js_call_function_with_checkpoint(js_env_t *env, js_value_t *receiver, js_value_t
   if (result) *result = (js_value_t *) value;
 
   return 0;
+}
+
+static inline int
+js__queue_microtask(js_env_t *env, js_value_t *function) {
+  JSValueRef exception = NULL;
+
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("Promise");
+
+  JSObjectRef constructor = (JSObjectRef) JSObjectGetProperty(env->context, global, ref, &exception);
+
+  JSStringRelease(ref);
+
+  assert(exception == NULL);
+
+  ref = JSStringCreateWithUTF8CString("resolve");
+
+  JSObjectRef resolve = (JSObjectRef) JSObjectGetProperty(env->context, constructor, ref, &exception);
+
+  JSStringRelease(ref);
+
+  assert(exception == NULL);
+
+  JSObjectRef promise = (JSObjectRef) JSObjectCallAsFunction(env->context, resolve, constructor, 0, NULL, &exception);
+
+  assert(exception == NULL);
+
+  ref = JSStringCreateWithUTF8CString("then");
+
+  JSObjectRef then = (JSObjectRef) JSObjectGetProperty(env->context, promise, ref, &exception);
+
+  JSStringRelease(ref);
+
+  assert(exception == NULL);
+
+  JSValueRef argv[] = {(JSValueRef) function};
+
+  JSObjectCallAsFunction(env->context, then, promise, 1, argv, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
+js_queue_microtask(js_env_t *env, js_value_t *function) {
+  if (env->exception) return js__error(env);
+
+  return js__queue_microtask(env, function);
+}
+
+static js_value_t *
+js__on_microtask(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  js_microtask_t *task;
+  err = js_get_callback_info(env, info, NULL, NULL, NULL, (void **) &task);
+  assert(err == 0);
+
+  task->cb(task->env, task->data);
+
+  free(task);
+
+  return NULL;
+}
+
+int
+js_queue_microtask_with_callback(js_env_t *env, js_task_cb cb, void *data) {
+  if (env->exception) return js__error(env);
+
+  int err;
+
+  js_microtask_t *task = malloc(sizeof(js_microtask_t));
+
+  task->env = env;
+  task->cb = cb;
+  task->data = data;
+
+  js_value_t *function;
+  err = js_create_function(env, "microtask", -1, js__on_microtask, (void *) task, &function);
+
+  if (err < 0) {
+    free(task);
+
+    return err;
+  }
+
+  return js__queue_microtask(env, function);
 }
 
 int
