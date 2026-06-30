@@ -4384,6 +4384,54 @@ js_set_prototype(js_env_t *env, js_value_t *object, js_value_t *prototype) {
   return 0;
 }
 
+static int
+js__set_integrity_level(js_env_t *env, js_value_t *object, const char *method) {
+  JSObjectRef global = JSContextGetGlobalObject(env->context);
+
+  JSStringRef object_ref = JSStringCreateWithUTF8CString("Object");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, global, object_ref, &env->exception);
+
+  JSStringRelease(object_ref);
+
+  if (env->exception) return js__propagate_exception(env);
+
+  JSStringRef method_ref = JSStringCreateWithUTF8CString(method);
+
+  JSValueRef fn = JSObjectGetProperty(env->context, (JSObjectRef) constructor, method_ref, &env->exception);
+
+  JSStringRelease(method_ref);
+
+  if (env->exception) return js__propagate_exception(env);
+
+  JSValueRef argv[] = {(JSValueRef) object};
+
+  env->depth++;
+
+  JSObjectCallAsFunction(env->context, (JSObjectRef) fn, (JSObjectRef) constructor, 1, argv, &env->exception);
+
+  env->depth--;
+
+  if (env->exception) return js__propagate_exception(env);
+  else js__clear_termination_exception(env);
+
+  return 0;
+}
+
+int
+js_seal(js_env_t *env, js_value_t *object) {
+  if (env->exception) return js__error(env);
+
+  return js__set_integrity_level(env, object, "seal");
+}
+
+int
+js_freeze(js_env_t *env, js_value_t *object) {
+  if (env->exception) return js__error(env);
+
+  return js__set_integrity_level(env, object, "freeze");
+}
+
 int
 js_get_property_names(js_env_t *env, js_value_t *object, js_value_t **result) {
   if (env->exception) return js__error(env);
