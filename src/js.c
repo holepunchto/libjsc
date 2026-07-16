@@ -918,6 +918,23 @@ js_prepare_script(js_env_t *env, const char *file, size_t len, int offset, js_va
 }
 
 int
+js_prepare_script_with_code_cache(js_env_t *env, const char *file, size_t len, int offset, js_value_t *source, const void *cached_data, size_t cached_data_len, bool *cache_rejected, js_script_t **result) {
+  if (cache_rejected) *cache_rejected = cached_data != NULL;
+
+  return js_prepare_script(env, file, len, offset, source, result);
+}
+
+int
+js_create_script_code_cache(js_env_t *env, js_script_t *script, void **data, size_t *len) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
 js_run_prepared_script(js_env_t *env, js_script_t *script, js_value_t **result) {
   if (env->exception) return js__error(env);
 
@@ -976,6 +993,23 @@ js_get_script_id(js_env_t *env, js_script_t *script, js_value_t **result) {
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_create_module(js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_meta_cb cb, void *data, js_module_t **result) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_create_module_with_code_cache(js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, const void *cached_data, size_t cached_data_len, bool *cache_rejected, js_module_meta_cb cb, void *data, js_module_t **result) {
+  if (cache_rejected) *cache_rejected = cached_data != NULL;
+
+  return js_create_module(env, name, len, offset, source, cb, data, result);
+}
+
+int
+js_create_module_code_cache(js_env_t *env, js_module_t *module, void **data, size_t *len) {
   int err;
 
   err = js_throw_error(env, NULL, "Unsupported operation");
@@ -2301,7 +2335,7 @@ js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb c
 }
 
 int
-js_create_function_with_source(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
+js_compile_function(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
   if (env->exception) return js__error(env);
 
   JSStringRef name_ref, file_ref;
@@ -2372,6 +2406,28 @@ js_create_function_with_source(js_env_t *env, const char *name, size_t name_len,
   js__attach_to_handle_scope(env, env->scope, function);
 
   return 0;
+}
+
+int
+js_compile_function_with_code_cache(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, const void *cached_data, size_t cached_data_len, bool *cache_rejected, js_value_t **result) {
+  if (cache_rejected) *cache_rejected = cached_data != NULL;
+
+  return js_compile_function(env, name, name_len, file, file_len, args, args_len, offset, source, result);
+}
+
+int
+js_create_function_code_cache(js_env_t *env, js_value_t *function, void **data, size_t *len) {
+  int err;
+
+  err = js_throw_error(env, NULL, "Unsupported operation");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
+int
+js_create_function_with_source(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
+  return js_compile_function(env, name, name_len, file, file_len, args, args_len, offset, source, result);
 }
 
 int
