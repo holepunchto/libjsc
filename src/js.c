@@ -3348,10 +3348,52 @@ js_is_boolean(js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_is_boolean_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("Boolean");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
 js_is_number(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
   *result = JSValueIsNumber(env->context, (JSValueRef) value);
+
+  return 0;
+}
+
+int
+js_is_number_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("Number");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
 
   return 0;
 }
@@ -3408,10 +3450,52 @@ js_is_string(js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_is_string_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("String");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
+
+  return 0;
+}
+
+int
 js_is_symbol(js_env_t *env, js_value_t *value, bool *result) {
   // Allow continuing even with a pending exception
 
   *result = JSValueIsSymbol(env->context, (JSValueRef) value);
+
+  return 0;
+}
+
+int
+js_is_symbol_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("Symbol");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
 
   return 0;
 }
@@ -3519,6 +3603,27 @@ js_is_bigint(js_env_t *env, js_value_t *value, bool *result) {
   } else {
     *result = false;
   }
+
+  return 0;
+}
+
+int
+js_is_bigint_object(js_env_t *env, js_value_t *value, bool *result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("BigInt");
+
+  JSValueRef constructor = JSObjectGetProperty(env->context, JSContextGetGlobalObject(env->context), ref, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
+
+  *result = JSValueIsInstanceOfConstructor(env->context, (JSValueRef) value, (JSObjectRef) constructor, &exception);
+
+  assert(exception == NULL);
 
   return 0;
 }
