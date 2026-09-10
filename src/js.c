@@ -1559,9 +1559,7 @@ js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_c
     return js__propagate_exception(env);
   }
 
-  if (JSValueIsObjectOfClass(env->context, wrapped, env->classes.wrap) &&
-      js__is_own_property(env, (JSObjectRef) object, ref, wrapped) &&
-      JSObjectGetPrivate((JSObjectRef) wrapped) != NULL) {
+  if (JSValueIsObjectOfClass(env->context, wrapped, env->classes.wrap) && js__is_own_property(env, (JSObjectRef) object, ref, wrapped) && JSObjectGetPrivate((JSObjectRef) wrapped) != NULL) {
     JSStringRelease(ref);
 
     err = js_throw_errorf(env, NULL, "Object is already wrapped");
