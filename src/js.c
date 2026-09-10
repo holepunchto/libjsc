@@ -1565,7 +1565,7 @@ js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_c
     (JSObjectRef) object,
     ref,
     external,
-    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+    kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
     &env->exception
   );
 
@@ -1876,7 +1876,7 @@ js_add_finalizer(js_env_t *env, js_value_t *object, void *data, js_finalize_cb f
       (JSObjectRef) object,
       ref,
       external,
-      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+      kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
       &exception
     );
 
@@ -1955,7 +1955,7 @@ js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
     (JSObjectRef) object,
     ref,
     external,
-    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+    kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
     &env->exception
   );
 
