@@ -1549,14 +1549,33 @@ js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_c
 
   int err;
 
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
+
+  JSValueRef wrapped = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
+
+  if (env->exception) {
+    JSStringRelease(ref);
+
+    return js__propagate_exception(env);
+  }
+
+  if (JSValueIsObjectOfClass(env->context, wrapped, env->classes.wrap) &&
+      js__is_own_property(env, (JSObjectRef) object, ref, wrapped) &&
+      JSObjectGetPrivate((JSObjectRef) wrapped) != NULL) {
+    JSStringRelease(ref);
+
+    err = js_throw_errorf(env, NULL, "Object is already wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
   js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
 
   finalizer->env = env;
   finalizer->data = data;
   finalizer->finalize_cb = finalize_cb;
   finalizer->finalize_hint = finalize_hint;
-
-  JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
   JSObjectRef external = JSObjectMake(env->context, env->classes.wrap, NULL);
 
