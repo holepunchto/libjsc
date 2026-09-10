@@ -992,6 +992,12 @@ js_get_script_id(js_env_t *env, js_script_t *script, js_value_t **result) {
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
+js_on_script_dynamic_import(js_env_t *env, js_script_t *script, js_dynamic_import_cb cb, void *data) {
+  return 0;
+}
+
+// https://bugs.webkit.org/show_bug.cgi?id=261600
+int
 js_create_module(js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_meta_cb cb, void *data, js_module_t **result) {
   int err;
 
@@ -1095,6 +1101,12 @@ js_get_default_module_id(js_env_t *env, js_value_t **result) {
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
+js_on_module_dynamic_import(js_env_t *env, js_module_t *module, js_dynamic_import_cb cb, void *data) {
+  return 0;
+}
+
+// https://bugs.webkit.org/show_bug.cgi?id=261600
+int
 js_get_module_namespace(js_env_t *env, js_module_t *module, js_value_t **result) {
   int err;
 
@@ -1148,39 +1160,53 @@ static inline void
 js__set_weak_reference(js_env_t *env, js_ref_t *reference) {
   if (reference->value == NULL) return;
 
-  if (JSValueIsObject(env->context, reference->value)) {
-    JSValueRef exception = NULL;
+  if (!JSValueIsObject(env->context, reference->value)) return;
 
-    JSObjectRef external = JSObjectMake(env->context, env->classes.reference, (void *) reference);
+  JSValueRef exception = NULL;
 
-    JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
+  JSObjectRef external = JSObjectMake(env->context, env->classes.reference, (void *) reference);
 
-    reference->symbol = JSValueMakeSymbol(env->context, ref);
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
 
-    JSStringRelease(ref);
+  JSValueRef symbol = JSValueMakeSymbol(env->context, ref);
 
-    JSValueProtect(env->context, reference->symbol);
+  JSStringRelease(ref);
 
-    JSObjectSetPropertyForKey(
-      env->context,
-      (JSObjectRef) reference->value,
-      reference->symbol,
-      external,
-      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
-      &exception
-    );
+  JSValueProtect(env->context, symbol);
 
-    assert(exception == NULL);
+  JSObjectSetPropertyForKey(
+    env->context,
+    (JSObjectRef) reference->value,
+    symbol,
+    external,
+    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
+    &exception
+  );
 
-    JSValueUnprotect(env->context, reference->value);
+  assert(exception == NULL);
+
+  JSValueRef installed = JSObjectGetPropertyForKey(env->context, (JSObjectRef) reference->value, symbol, &exception);
+
+  assert(exception == NULL);
+
+  if (!JSValueIsStrictEqual(env->context, installed, external)) {
+    JSObjectSetPrivate(external, NULL);
+
+    JSValueUnprotect(env->context, symbol);
+
+    return;
   }
+
+  reference->symbol = symbol;
+
+  JSValueUnprotect(env->context, reference->value);
 }
 
 static inline void
 js__clear_weak_reference(js_env_t *env, js_ref_t *reference) {
-  if (reference->value == NULL) return;
+  if (reference->symbol == NULL) return;
 
-  if (JSValueIsObject(env->context, reference->value)) {
+  if (reference->value) {
     JSValueRef exception = NULL;
 
     JSValueProtect(env->context, reference->value);
@@ -1194,14 +1220,18 @@ js__clear_weak_reference(js_env_t *env, js_ref_t *reference) {
 
     assert(exception == NULL);
 
-    JSObjectSetPrivate((JSObjectRef) external, NULL);
+    if (JSValueIsObjectOfClass(env->context, external, env->classes.reference)) {
+      JSObjectSetPrivate((JSObjectRef) external, NULL);
+    }
 
     JSObjectDeletePropertyForKey(env->context, (JSObjectRef) reference->value, reference->symbol, &exception);
 
     assert(exception == NULL);
-
-    JSValueUnprotect(env->context, reference->symbol);
   }
+
+  JSValueUnprotect(env->context, reference->symbol);
+
+  reference->symbol = NULL;
 }
 
 int
@@ -1505,6 +1535,8 @@ static void
 js__on_wrap_finalize(JSObjectRef external) {
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate(external);
 
+  if (finalizer == NULL) return;
+
   if (finalizer->finalize_cb) {
     finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
   }
@@ -1512,9 +1544,41 @@ js__on_wrap_finalize(JSObjectRef external) {
   free(finalizer);
 }
 
+static bool
+js__is_own_property(js_env_t *env, JSObjectRef object, JSStringRef name, JSValueRef value) {
+  JSValueRef prototype = JSObjectGetPrototype(env->context, object);
+
+  if (!JSValueIsObject(env->context, prototype)) return true;
+
+  JSValueRef inherited = JSObjectGetProperty(env->context, (JSObjectRef) prototype, name, NULL);
+
+  return !JSValueIsStrictEqual(env->context, value, inherited);
+}
+
 int
 js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
   if (env->exception) return js__error(env);
+
+  int err;
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
+
+  JSValueRef wrapped = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
+
+  if (env->exception) {
+    JSStringRelease(ref);
+
+    return js__propagate_exception(env);
+  }
+
+  if (JSValueIsObjectOfClass(env->context, wrapped, env->classes.wrap) && js__is_own_property(env, (JSObjectRef) object, ref, wrapped) && JSObjectGetPrivate((JSObjectRef) wrapped) != NULL) {
+    JSStringRelease(ref);
+
+    err = js_throw_errorf(env, NULL, "Object is already wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
 
   js_finalizer_t *finalizer = malloc(sizeof(js_finalizer_t));
 
@@ -1523,22 +1587,39 @@ js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_c
   finalizer->finalize_cb = finalize_cb;
   finalizer->finalize_hint = finalize_hint;
 
-  JSObjectRef external = JSObjectMake(env->context, env->classes.wrap, (void *) finalizer);
-
-  JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
+  JSObjectRef external = JSObjectMake(env->context, env->classes.wrap, NULL);
 
   JSObjectSetProperty(
     env->context,
     (JSObjectRef) object,
     ref,
     external,
-    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
+    kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
     &env->exception
   );
 
+  if (env->exception) {
+    JSStringRelease(ref);
+
+    free(finalizer);
+
+    return js__propagate_exception(env);
+  }
+
+  JSValueRef installed = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+
   JSStringRelease(ref);
 
-  if (env->exception) return js__propagate_exception(env);
+  if (!JSValueIsStrictEqual(env->context, installed, external)) {
+    free(finalizer);
+
+    err = js_throw_errorf(env, NULL, "Object could not be wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
+  JSObjectSetPrivate(external, (void *) finalizer);
 
   if (result) return js_create_reference(env, object, 0, result);
 
@@ -1553,11 +1634,34 @@ js_unwrap(js_env_t *env, js_value_t *object, void **result) {
 
   JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
 
+  if (env->exception) {
+    JSStringRelease(ref);
+
+    return js__propagate_exception(env);
+  }
+
+  int err;
+
+  bool wrapped = JSValueIsObjectOfClass(env->context, external, env->classes.wrap) &&
+                 js__is_own_property(env, (JSObjectRef) object, ref, external);
+
   JSStringRelease(ref);
 
-  if (env->exception) return js__propagate_exception(env);
+  if (!wrapped) {
+    err = js_throw_type_error(env, NULL, "Object is not wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
 
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
+
+  if (finalizer == NULL) {
+    err = js_throw_type_error(env, NULL, "Object is not wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
 
   *result = finalizer->data;
 
@@ -1578,17 +1682,34 @@ js_remove_wrap(js_env_t *env, js_value_t *object, void **result) {
     return js__propagate_exception(env);
   }
 
-  js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
+  int err;
 
-  finalizer->finalize_cb = NULL;
-
-  if (result) *result = finalizer->data;
-
-  JSObjectDeleteProperty(env->context, (JSObjectRef) object, ref, &env->exception);
+  bool wrapped = JSValueIsObjectOfClass(env->context, external, env->classes.wrap) &&
+                 js__is_own_property(env, (JSObjectRef) object, ref, external);
 
   JSStringRelease(ref);
 
-  if (env->exception) return js__propagate_exception(env);
+  if (!wrapped) {
+    err = js_throw_type_error(env, NULL, "Object is not wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
+  js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
+
+  if (finalizer == NULL) {
+    err = js_throw_type_error(env, NULL, "Object is not wrapped");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
+  if (result) *result = finalizer->data;
+
+  JSObjectSetPrivate((JSObjectRef) external, NULL);
+
+  free(finalizer);
 
   return 0;
 }
@@ -1766,23 +1887,16 @@ js_add_finalizer(js_env_t *env, js_value_t *object, void *data, js_finalize_cb f
 
   JSValueRef exception = NULL;
 
-  js_finalizer_list_t *prev = malloc(sizeof(js_finalizer_list_t));
-
-  js_finalizer_t *finalizer = &prev->finalizer;
-
-  finalizer->env = env;
-  finalizer->data = data;
-  finalizer->finalize_cb = finalize_cb;
-  finalizer->finalize_hint = finalize_hint;
-
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_finalizer");
+
+  JSValueRef existing = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &exception);
+
+  assert(exception == NULL);
 
   JSObjectRef external;
 
-  if (JSObjectHasProperty(env->context, (JSObjectRef) object, ref)) {
-    external = (JSObjectRef) JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &exception);
-
-    assert(exception == NULL);
+  if (JSValueIsObjectOfClass(env->context, existing, env->classes.finalizer) && js__is_own_property(env, (JSObjectRef) object, ref, existing)) {
+    external = (JSObjectRef) existing;
   } else {
     external = JSObjectMake(env->context, env->classes.finalizer, NULL);
 
@@ -1791,18 +1905,35 @@ js_add_finalizer(js_env_t *env, js_value_t *object, void *data, js_finalize_cb f
       (JSObjectRef) object,
       ref,
       external,
-      kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+      kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
       &exception
     );
 
     assert(exception == NULL);
+
+    JSValueRef installed = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &exception);
+
+    assert(exception == NULL);
+
+    if (!JSValueIsStrictEqual(env->context, installed, external)) external = NULL;
   }
 
   JSStringRelease(ref);
 
-  prev->next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
+  if (external) {
+    js_finalizer_list_t *prev = malloc(sizeof(js_finalizer_list_t));
 
-  JSObjectSetPrivate(external, (void *) prev);
+    js_finalizer_t *finalizer = &prev->finalizer;
+
+    finalizer->env = env;
+    finalizer->data = data;
+    finalizer->finalize_cb = finalize_cb;
+    finalizer->finalize_hint = finalize_hint;
+
+    prev->next = (js_finalizer_list_t *) JSObjectGetPrivate(external);
+
+    JSObjectSetPrivate(external, (void *) prev);
+  }
 
   if (result) return js_create_reference(env, object, 0, result);
 
@@ -1822,6 +1953,25 @@ js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
 
   int err;
 
+  JSStringRef ref = JSStringCreateWithUTF8CString("__native_type_tag");
+
+  JSValueRef tagged = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
+
+  if (env->exception) {
+    JSStringRelease(ref);
+
+    return js__propagate_exception(env);
+  }
+
+  if (JSValueIsObjectOfClass(env->context, tagged, env->classes.type_tag) && js__is_own_property(env, (JSObjectRef) object, ref, tagged)) {
+    JSStringRelease(ref);
+
+    err = js_throw_errorf(env, NULL, "Object is already type tagged");
+    assert(err == 0);
+
+    return js__error(env);
+  }
+
   js_type_tag_t *existing = malloc(sizeof(js_type_tag_t));
 
   existing->lower = tag->lower;
@@ -1829,34 +1979,30 @@ js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
 
   JSObjectRef external = JSObjectMake(env->context, env->classes.type_tag, (void *) existing);
 
-  JSStringRef ref = JSStringCreateWithUTF8CString("__native_type_tag");
-
-  if (JSObjectHasProperty(env->context, (JSObjectRef) object, ref)) {
-    JSStringRelease(ref);
-
-    err = js_throw_errorf(env, NULL, "Object is already type tagged");
-    assert(err == 0);
-
-    free(existing);
-
-    return js__error(env);
-  }
-
   JSObjectSetProperty(
     env->context,
     (JSObjectRef) object,
     ref,
     external,
-    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
+    kJSPropertyAttributeDontEnum | kJSPropertyAttributeDontDelete,
     &env->exception
   );
 
-  JSStringRelease(ref);
-
   if (env->exception) {
-    free(existing);
+    JSStringRelease(ref);
 
     return js__propagate_exception(env);
+  }
+
+  JSValueRef installed = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, NULL);
+
+  JSStringRelease(ref);
+
+  if (!JSValueIsStrictEqual(env->context, installed, external)) {
+    err = js_throw_errorf(env, NULL, "Object could not be type tagged");
+    assert(err == 0);
+
+    return js__error(env);
   }
 
   return 0;
@@ -1870,14 +2016,23 @@ js_check_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag, b
 
   JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
 
-  if (env->exception) return js__propagate_exception(env);
+  if (env->exception) {
+    JSStringRelease(ref);
+
+    return js__propagate_exception(env);
+  }
+
+  bool tagged = JSValueIsObjectOfClass(env->context, external, env->classes.type_tag) &&
+                js__is_own_property(env, (JSObjectRef) object, ref, external);
+
+  JSStringRelease(ref);
 
   *result = false;
 
-  if (external) {
+  if (tagged) {
     js_type_tag_t *existing = (js_type_tag_t *) JSObjectGetPrivate((JSObjectRef) external);
 
-    *result = existing->lower == tag->lower && existing->upper == tag->upper;
+    *result = existing != NULL && existing->lower == tag->lower && existing->upper == tag->upper;
   }
 
   return 0;
@@ -2015,9 +2170,26 @@ js_create_bigint_words(js_env_t *env, int sign, const uint64_t *words, size_t le
   return js__error(env);
 }
 
+static inline int
+js__check_string_length(js_env_t *env, size_t len) {
+  int err;
+
+  if (len == (size_t) -1 || len <= INT_MAX) return 0;
+
+  err = js_throw_range_error(env, NULL, "Invalid string length");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
 int
 js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t **result) {
   // Allow continuing even with a pending exception
+
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
 
   JSStringRef ref;
 
@@ -2046,6 +2218,11 @@ int
 js_create_string_utf16le(js_env_t *env, const utf16_t *str, size_t len, js_value_t **result) {
   // Allow continuing even with a pending exception
 
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
+
   JSStringRef ref;
 
   if (len == (size_t) -1) len = wcslen((wchar_t *) str);
@@ -2066,6 +2243,11 @@ js_create_string_utf16le(js_env_t *env, const utf16_t *str, size_t len, js_value
 int
 js_create_string_latin1(js_env_t *env, const latin1_t *str, size_t len, js_value_t **result) {
   // Allow continuing even with a pending exception
+
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
 
   JSStringRef ref;
 
@@ -2096,7 +2278,7 @@ js_create_external_string_utf8(js_env_t *env, utf8_t *str, size_t len, js_finali
 
   int err;
   err = js_create_string_utf8(env, str, len, result);
-  assert(err == 0);
+  if (err < 0) return err;
 
   if (copied) *copied = true;
 
@@ -2111,7 +2293,7 @@ js_create_external_string_utf16le(js_env_t *env, utf16_t *str, size_t len, js_fi
 
   int err;
   err = js_create_string_utf16le(env, str, len, result);
-  assert(err == 0);
+  if (err < 0) return err;
 
   if (copied) *copied = true;
 
@@ -2126,7 +2308,7 @@ js_create_external_string_latin1(js_env_t *env, latin1_t *str, size_t len, js_fi
 
   int err;
   err = js_create_string_latin1(env, str, len, result);
-  assert(err == 0);
+  if (err < 0) return err;
 
   if (copied) *copied = true;
 
@@ -2288,16 +2470,16 @@ js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb c
 
   JSStringRef ref;
 
-  if (len == (size_t) -1) {
+  if (name == NULL) {
+    ref = NULL;
+  } else if (len == (size_t) -1) {
     ref = JSStringCreateWithUTF8CString(name);
-  } else if (name) {
+  } else {
     char *copy = strndup(name, len);
 
-    ref = JSStringCreateWithUTF8CString(name);
+    ref = JSStringCreateWithUTF8CString(copy);
 
     free(copy);
-  } else {
-    ref = NULL;
   }
 
   JSObjectRef function = JSObjectMakeFunctionWithCallback(env->context, ref, js__on_function_call);
@@ -2338,30 +2520,32 @@ int
 js_compile_function(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   JSStringRef name_ref, file_ref;
 
-  if (name_len == (size_t) -1) {
+  if (name == NULL) {
+    name_ref = NULL;
+  } else if (name_len == (size_t) -1) {
     name_ref = JSStringCreateWithUTF8CString(name);
-  } else if (name) {
+  } else {
     char *copy = strndup(name, name_len);
 
-    name_ref = JSStringCreateWithUTF8CString(name);
+    name_ref = JSStringCreateWithUTF8CString(copy);
 
     free(copy);
-  } else {
-    name_ref = NULL;
   }
 
-  if (file_len == (size_t) -1) {
+  if (file == NULL) {
+    file_ref = NULL;
+  } else if (file_len == (size_t) -1) {
     file_ref = JSStringCreateWithUTF8CString(file);
-  } else if (file) {
+  } else {
     char *copy = strndup(file, file_len);
 
-    file_ref = JSStringCreateWithUTF8CString(file);
+    file_ref = JSStringCreateWithUTF8CString(copy);
 
     free(copy);
-  } else {
-    file = NULL;
   }
 
   JSStringRef *arg_refs = malloc(sizeof(JSStringRef) * args_len);
@@ -2373,6 +2557,19 @@ js_compile_function(js_env_t *env, const char *name, size_t name_len, const char
   JSStringRef source_ref = JSValueToStringCopy(env->context, (JSValueRef) source, NULL);
 
   JSObjectRef function = JSObjectMakeFunction(env->context, name_ref, args_len, arg_refs, source_ref, file_ref, offset, &env->exception);
+
+  if (env->exception == NULL) {
+    JSStringRef length_ref = JSStringCreateWithUTF8CString("length");
+
+    JSValueRef length = JSObjectGetProperty(env->context, function, length_ref, NULL);
+
+    JSStringRelease(length_ref);
+
+    if (JSValueToNumber(env->context, length, NULL) != (double) args_len) {
+      err = js_throw_error(env, NULL, "Could not compile function");
+      assert(err == 0);
+    }
+  }
 
   if (env->exception == NULL) {
     // Mint a unique identifier for the function and stash it on the function so
@@ -2430,6 +2627,12 @@ js_create_function_with_source(js_env_t *env, const char *name, size_t name_len,
   return js_compile_function(env, name, name_len, file, file_len, args, args_len, offset, source, result);
 }
 
+// https://bugs.webkit.org/show_bug.cgi?id=261600
+int
+js_on_function_dynamic_import(js_env_t *env, js_value_t *function, js_dynamic_import_cb cb, void *data) {
+  return 0;
+}
+
 int
 js_create_typed_function(js_env_t *env, const char *name, size_t len, js_function_cb cb, const js_callback_signature_t *signature, const void *address, void *data, js_value_t **result) {
   return js_create_function(env, name, len, cb, data, result);
@@ -2485,6 +2688,23 @@ js_create_array_with_length(js_env_t *env, size_t len, js_value_t **result) {
   JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) len)};
 
   JSObjectRef array = JSObjectMakeArray(env->context, 1, argv, &exception);
+
+  assert(exception == NULL);
+
+  *result = (js_value_t *) array;
+
+  js__attach_to_handle_scope(env, env->scope, array);
+
+  return 0;
+}
+
+int
+js_create_array_with_elements(js_env_t *env, js_value_t *const elements[], size_t element_count, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef exception = NULL;
+
+  JSObjectRef array = JSObjectMakeArray(env->context, element_count, (const JSValueRef *) elements, &exception);
 
   assert(exception == NULL);
 
@@ -3578,7 +3798,15 @@ js_is_wrapped(js_env_t *env, js_value_t *value, bool *result) {
 
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
-  *result = JSValueIsObject(env->context, (JSValueRef) value) && JSObjectHasProperty(env->context, (JSObjectRef) value, ref);
+  *result = false;
+
+  if (JSValueIsObject(env->context, (JSValueRef) value)) {
+    JSValueRef external = JSObjectGetProperty(env->context, (JSObjectRef) value, ref, NULL);
+
+    *result = JSValueIsObjectOfClass(env->context, external, env->classes.wrap) &&
+              js__is_own_property(env, (JSObjectRef) value, ref, external) &&
+              JSObjectGetPrivate((JSObjectRef) external) != NULL;
+  }
 
   JSStringRelease(ref);
 
@@ -4102,6 +4330,59 @@ js_is_module_namespace(js_env_t *env, js_value_t *value, bool *result) {
 }
 
 int
+js_get_object_type(js_env_t *env, js_value_t *value, js_object_type_t *result) {
+  // Allow continuing even with a pending exception
+
+  int err;
+
+  bool is;
+
+  // Classify by way of the individual predicates, in the order of precedence
+  // documented for `js_object_type_t`, so that the two cannot drift apart. The
+  // saving is in classifying with a single call, not in the predicates
+  // themselves, which are all cheap.
+#define V(type, predicate) \
+  err = predicate(env, value, &is); \
+  assert(err == 0); \
+  if (is) { \
+    *result = type; \
+    return 0; \
+  }
+
+  V(js_array, js_is_array)
+  V(js_arguments, js_is_arguments)
+  V(js_date, js_is_date)
+  V(js_regexp, js_is_regexp)
+  V(js_error, js_is_error)
+  V(js_promise, js_is_promise)
+  V(js_proxy, js_is_proxy)
+  V(js_generator, js_is_generator)
+  V(js_map, js_is_map)
+  V(js_set, js_is_set)
+  V(js_map_iterator, js_is_map_iterator)
+  V(js_set_iterator, js_is_set_iterator)
+  V(js_weak_map, js_is_weak_map)
+  V(js_weak_set, js_is_weak_set)
+  V(js_weak_ref, js_is_weak_ref)
+  V(js_arraybuffer, js_is_arraybuffer)
+  V(js_sharedarraybuffer, js_is_sharedarraybuffer)
+  V(js_typedarray, js_is_typedarray)
+  V(js_dataview, js_is_dataview)
+  V(js_module_namespace, js_is_module_namespace)
+  V(js_boolean_object, js_is_boolean_object)
+  V(js_number_object, js_is_number_object)
+  V(js_string_object, js_is_string_object)
+  V(js_symbol_object, js_is_symbol_object)
+  V(js_bigint_object, js_is_bigint_object)
+  V((js_object_type_t) js_external, js_is_external)
+#undef V
+
+  *result = (js_object_type_t) js_object;
+
+  return 0;
+}
+
+int
 js_strict_equals(js_env_t *env, js_value_t *a, js_value_t *b, bool *result) {
   // Allow continuing even with a pending exception
 
@@ -4223,19 +4504,14 @@ js_get_value_int64(js_env_t *env, js_value_t *value, int64_t *result) {
 
   JSValueRef exception = NULL;
 
-  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
-    int64_t number = JSValueToInt64(env->context, (JSValueRef) value, &exception);
+  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+  assert(exception == NULL);
 
-    *result = number;
-  } else {
-    double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
-
-    assert(exception == NULL);
-
-    *result = (int64_t) number;
-  }
+  if (!isfinite(number)) *result = 0;
+  else if (number <= (double) INT64_MIN) *result = INT64_MIN;
+  else if (number >= (double) INT64_MAX) *result = INT64_MAX;
+  else *result = (int64_t) number;
 
   return 0;
 }
@@ -4331,6 +4607,20 @@ js_get_value_bigint_words(js_env_t *env, js_value_t *value, int *sign, uint64_t 
   return js__error(env);
 }
 
+static size_t
+js__utf16le_prefix(size_t (*length)(const utf16_t *, size_t), const utf16_t *utf16, size_t utf16_len, size_t len) {
+  size_t lo = 0, hi = utf16_len;
+
+  while (lo < hi) {
+    size_t mid = lo + (hi - lo + 1) / 2;
+
+    if (length(utf16, mid) <= len) lo = mid;
+    else hi = mid - 1;
+  }
+
+  return lo;
+}
+
 int
 js_get_value_string_utf8(js_env_t *env, js_value_t *value, utf8_t *str, size_t len, size_t *result) {
   // Allow continuing even with a pending exception
@@ -4348,7 +4638,13 @@ js_get_value_string_utf8(js_env_t *env, js_value_t *value, utf8_t *str, size_t l
   if (str == NULL) {
     *result = utf8_length_from_utf16le(utf16, utf16_len);
   } else if (len != 0) {
-    size_t written = utf16le_convert_to_utf8(utf16, utf16_len, str);
+    size_t prefix = utf16_len;
+
+    if (utf8_length_from_utf16le(utf16, utf16_len) > len) {
+      prefix = js__utf16le_prefix(utf8_length_from_utf16le, utf16, utf16_len, len);
+    }
+
+    size_t written = utf16le_convert_to_utf8(utf16, prefix, str);
 
     if (written < len) str[written] = '\0';
 
@@ -4408,7 +4704,13 @@ js_get_value_string_latin1(js_env_t *env, js_value_t *value, latin1_t *str, size
   if (str == NULL) {
     *result = latin1_length_from_utf16le(utf16, utf16_len);
   } else if (len != 0) {
-    size_t written = utf16le_convert_to_latin1(utf16, utf16_len, str);
+    size_t prefix = utf16_len;
+
+    if (latin1_length_from_utf16le(utf16, utf16_len) > len) {
+      prefix = js__utf16le_prefix(latin1_length_from_utf16le, utf16, utf16_len, len);
+    }
+
+    size_t written = utf16le_convert_to_latin1(utf16, prefix, str);
 
     if (written < len) str[written] = '\0';
 
@@ -4503,7 +4805,7 @@ js_get_array_elements(js_env_t *env, js_value_t *array, js_value_t **elements, s
 }
 
 int
-js_set_array_elements(js_env_t *env, js_value_t *array, const js_value_t *elements[], size_t len, size_t offset) {
+js_set_array_elements(js_env_t *env, js_value_t *array, js_value_t *const elements[], size_t len, size_t offset) {
   if (env->exception) return js__error(env);
 
   env->depth++;
