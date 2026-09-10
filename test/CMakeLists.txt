@@ -29,6 +29,7 @@ list(APPEND tests
   coerce-to-boolean
   coerce-to-object
   compile-function
+  compile-function-invalid-argument-name
   compile-function-with-code-cache
   compile-function-with-code-cache-rejected
   create-array-with-elements
@@ -44,6 +45,7 @@ list(APPEND tests
   create-delegate
   create-delegate-delete-throw
   create-delegate-get-throw
+  create-delegate-get-throw-then-clear
   create-delegate-get-without-has
   create-delegate-has-throw
   create-delegate-keys-throw
@@ -71,6 +73,7 @@ list(APPEND tests
   create-function-return-double
   create-function-throw
   create-function-throw-indirect
+  create-function-throw-then-clear
   create-function-with-finalizer
   create-int64
   create-module-import-missing
@@ -96,6 +99,7 @@ list(APPEND tests
   create-sharedarraybuffer
   create-sharedarraybuffer-with-backing-store
   create-string-latin1
+  create-string-too-long
   create-string-utf8
   create-string-utf8-with-null
   create-string-utf16le
@@ -136,6 +140,10 @@ list(APPEND tests
   delete-element
   delete-property
   dynamic-import
+  dynamic-import-function-handler
+  dynamic-import-handler-code-cache
+  dynamic-import-module-handler
+  dynamic-import-script-handler
   dynamic-import-with-promise
   dynamic-import-with-referrer
   dynamic-import-with-referrer-function
@@ -158,6 +166,7 @@ list(APPEND tests
   get-heap-space-statistics
   get-heap-statistics
   get-module-name
+  get-module-namespace-uninstantiated
   get-new-target
   get-object-type
   get-object-type-arguments
@@ -193,6 +202,7 @@ list(APPEND tests
   get-property-missing
   get-prototype
   get-sharedarraybuffer-info
+  get-string-view
   get-typedarray-info-uint16array
   get-typedarray-info-uint16array-large
   get-typedarray-info-uint8array
@@ -200,6 +210,7 @@ list(APPEND tests
   get-typedarray-info-uint8array-with-offset
   get-value-bigint-uint64
   get-value-int32-int64
+  get-value-int64-out-of-range
   get-value-string-utf8
   get-value-string-utf8-length
   get-value-string-utf8-no-null
@@ -209,6 +220,7 @@ list(APPEND tests
   has-property
   import-meta
   import-meta-throw
+  instantiate-module-evaluating
   inspector
   inspector-attach-context
   inspector-multiple-debugger-enable
@@ -277,9 +289,13 @@ list(APPEND tests
   run-module-async
   run-module-cyclic-import
   run-module-double-nested-import
+  run-module-evaluating
   run-module-in-context
   run-module-nested-import
+  run-module-relative-import
   run-module-throw
+  run-module-throw-then-clear
+  run-module-uninstantiated
   run-script
   run-script-ignore-return
   run-script-in-context
@@ -376,6 +392,7 @@ list(APPEND skipped_tests
   get-filtered-property-names
   get-module-name
   get-new-target
+  get-string-view
   has-own-property
   symbol-for
 
@@ -421,6 +438,10 @@ list(APPEND skipped_tests
   # https://bugs.webkit.org/show_bug.cgi?id=261600
   create-module-import-missing
   dynamic-import
+  dynamic-import-function-handler
+  dynamic-import-handler-code-cache
+  dynamic-import-module-handler
+  dynamic-import-script-handler
   dynamic-import-with-promise
   dynamic-import-with-referrer
   dynamic-import-with-referrer-function
@@ -428,15 +449,21 @@ list(APPEND skipped_tests
   dynamic-import-with-referrer-prepared-and-script
   dynamic-import-with-referrer-script
   dynamic-import-without-handler
+  get-module-namespace-uninstantiated
   import-meta
   import-meta-throw
+  instantiate-module-evaluating
   run-module
   run-module-async
   run-module-cyclic-import
   run-module-nested-import
   run-module-double-nested-import
+  run-module-evaluating
   run-module-in-context
+  run-module-relative-import
   run-module-throw
+  run-module-throw-then-clear
+  run-module-uninstantiated
 
   # https://bugs.webkit.org/show_bug.cgi?id=250552
   create-external-arraybuffer-with-finalizer-detach

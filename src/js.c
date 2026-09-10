@@ -992,6 +992,12 @@ js_get_script_id(js_env_t *env, js_script_t *script, js_value_t **result) {
 
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
+js_on_script_dynamic_import(js_env_t *env, js_script_t *script, js_dynamic_import_cb cb, void *data) {
+  return 0;
+}
+
+// https://bugs.webkit.org/show_bug.cgi?id=261600
+int
 js_create_module(js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_meta_cb cb, void *data, js_module_t **result) {
   int err;
 
@@ -1090,6 +1096,12 @@ js_get_default_module_id(js_env_t *env, js_value_t **result) {
 
   js__attach_to_handle_scope(env, env->scope, id);
 
+  return 0;
+}
+
+// https://bugs.webkit.org/show_bug.cgi?id=261600
+int
+js_on_module_dynamic_import(js_env_t *env, js_module_t *module, js_dynamic_import_cb cb, void *data) {
   return 0;
 }
 
@@ -2158,9 +2170,26 @@ js_create_bigint_words(js_env_t *env, int sign, const uint64_t *words, size_t le
   return js__error(env);
 }
 
+static inline int
+js__check_string_length(js_env_t *env, size_t len) {
+  int err;
+
+  if (len == (size_t) -1 || len <= INT_MAX) return 0;
+
+  err = js_throw_range_error(env, NULL, "Invalid string length");
+  assert(err == 0);
+
+  return js__error(env);
+}
+
 int
 js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t **result) {
   // Allow continuing even with a pending exception
+
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
 
   JSStringRef ref;
 
@@ -2189,6 +2218,11 @@ int
 js_create_string_utf16le(js_env_t *env, const utf16_t *str, size_t len, js_value_t **result) {
   // Allow continuing even with a pending exception
 
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
+
   JSStringRef ref;
 
   if (len == (size_t) -1) len = wcslen((wchar_t *) str);
@@ -2209,6 +2243,11 @@ js_create_string_utf16le(js_env_t *env, const utf16_t *str, size_t len, js_value
 int
 js_create_string_latin1(js_env_t *env, const latin1_t *str, size_t len, js_value_t **result) {
   // Allow continuing even with a pending exception
+
+  int err;
+
+  err = js__check_string_length(env, len);
+  if (err < 0) return err;
 
   JSStringRef ref;
 
@@ -2239,7 +2278,7 @@ js_create_external_string_utf8(js_env_t *env, utf8_t *str, size_t len, js_finali
 
   int err;
   err = js_create_string_utf8(env, str, len, result);
-  assert(err == 0);
+  if (err < 0) return err;
 
   if (copied) *copied = true;
 
@@ -2254,7 +2293,7 @@ js_create_external_string_utf16le(js_env_t *env, utf16_t *str, size_t len, js_fi
 
   int err;
   err = js_create_string_utf16le(env, str, len, result);
-  assert(err == 0);
+  if (err < 0) return err;
 
   if (copied) *copied = true;
 
@@ -2269,7 +2308,7 @@ js_create_external_string_latin1(js_env_t *env, latin1_t *str, size_t len, js_fi
 
   int err;
   err = js_create_string_latin1(env, str, len, result);
-  assert(err == 0);
+  if (err < 0) return err;
 
   if (copied) *copied = true;
 
@@ -2431,16 +2470,16 @@ js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb c
 
   JSStringRef ref;
 
-  if (len == (size_t) -1) {
+  if (name == NULL) {
+    ref = NULL;
+  } else if (len == (size_t) -1) {
     ref = JSStringCreateWithUTF8CString(name);
-  } else if (name) {
+  } else {
     char *copy = strndup(name, len);
 
-    ref = JSStringCreateWithUTF8CString(name);
+    ref = JSStringCreateWithUTF8CString(copy);
 
     free(copy);
-  } else {
-    ref = NULL;
   }
 
   JSObjectRef function = JSObjectMakeFunctionWithCallback(env->context, ref, js__on_function_call);
@@ -2481,30 +2520,32 @@ int
 js_compile_function(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
   if (env->exception) return js__error(env);
 
+  int err;
+
   JSStringRef name_ref, file_ref;
 
-  if (name_len == (size_t) -1) {
+  if (name == NULL) {
+    name_ref = NULL;
+  } else if (name_len == (size_t) -1) {
     name_ref = JSStringCreateWithUTF8CString(name);
-  } else if (name) {
+  } else {
     char *copy = strndup(name, name_len);
 
-    name_ref = JSStringCreateWithUTF8CString(name);
+    name_ref = JSStringCreateWithUTF8CString(copy);
 
     free(copy);
-  } else {
-    name_ref = NULL;
   }
 
-  if (file_len == (size_t) -1) {
+  if (file == NULL) {
+    file_ref = NULL;
+  } else if (file_len == (size_t) -1) {
     file_ref = JSStringCreateWithUTF8CString(file);
-  } else if (file) {
+  } else {
     char *copy = strndup(file, file_len);
 
-    file_ref = JSStringCreateWithUTF8CString(file);
+    file_ref = JSStringCreateWithUTF8CString(copy);
 
     free(copy);
-  } else {
-    file = NULL;
   }
 
   JSStringRef *arg_refs = malloc(sizeof(JSStringRef) * args_len);
@@ -2516,6 +2557,19 @@ js_compile_function(js_env_t *env, const char *name, size_t name_len, const char
   JSStringRef source_ref = JSValueToStringCopy(env->context, (JSValueRef) source, NULL);
 
   JSObjectRef function = JSObjectMakeFunction(env->context, name_ref, args_len, arg_refs, source_ref, file_ref, offset, &env->exception);
+
+  if (env->exception == NULL) {
+    JSStringRef length_ref = JSStringCreateWithUTF8CString("length");
+
+    JSValueRef length = JSObjectGetProperty(env->context, function, length_ref, NULL);
+
+    JSStringRelease(length_ref);
+
+    if (JSValueToNumber(env->context, length, NULL) != (double) args_len) {
+      err = js_throw_error(env, NULL, "Could not compile function");
+      assert(err == 0);
+    }
+  }
 
   if (env->exception == NULL) {
     // Mint a unique identifier for the function and stash it on the function so
@@ -2571,6 +2625,12 @@ js_create_function_code_cache(js_env_t *env, js_value_t *function, void **data, 
 int
 js_create_function_with_source(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
   return js_compile_function(env, name, name_len, file, file_len, args, args_len, offset, source, result);
+}
+
+// https://bugs.webkit.org/show_bug.cgi?id=261600
+int
+js_on_function_dynamic_import(js_env_t *env, js_value_t *function, js_dynamic_import_cb cb, void *data) {
+  return 0;
 }
 
 int
@@ -4444,19 +4504,14 @@ js_get_value_int64(js_env_t *env, js_value_t *value, int64_t *result) {
 
   JSValueRef exception = NULL;
 
-  if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
-    int64_t number = JSValueToInt64(env->context, (JSValueRef) value, &exception);
+  double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+  assert(exception == NULL);
 
-    *result = number;
-  } else {
-    double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
-
-    assert(exception == NULL);
-
-    *result = (int64_t) number;
-  }
+  if (!isfinite(number)) *result = 0;
+  else if (number <= (double) INT64_MIN) *result = INT64_MIN;
+  else if (number >= (double) INT64_MAX) *result = INT64_MAX;
+  else *result = (int64_t) number;
 
   return 0;
 }
