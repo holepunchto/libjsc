@@ -7,6 +7,7 @@ list(APPEND tests
   add-teardown-callback-remove
   add-type-tag
   add-type-tag-delegate
+  add-type-tag-twice
   adjust-external-memory
   atomics-wait-timeout
   atomics-wait-timeout-notify
@@ -19,6 +20,8 @@ list(APPEND tests
   call-function-with-checkpoint
   call-threadsafe-function-after-release
   call-threadsafe-function-with-data
+  check-type-tag-from-prototype
+  check-type-tag-not-tagged
   coerce-number-to-string
   coerce-object-to-string
   coerce-string-to-number
@@ -28,6 +31,7 @@ list(APPEND tests
   compile-function
   compile-function-with-code-cache
   compile-function-with-code-cache-rejected
+  create-array-with-elements
   create-arraybuffer
   create-arraybuffer-too-large
   create-arraybuffer-with-backing-store
@@ -155,6 +159,33 @@ list(APPEND tests
   get-heap-statistics
   get-module-name
   get-new-target
+  get-object-type
+  get-object-type-arguments
+  get-object-type-array
+  get-object-type-arraybuffer
+  get-object-type-bigint-object
+  get-object-type-boolean-object
+  get-object-type-dataview
+  get-object-type-date
+  get-object-type-error
+  get-object-type-external
+  get-object-type-generator
+  get-object-type-map
+  get-object-type-map-iterator
+  get-object-type-module-namespace
+  get-object-type-number-object
+  get-object-type-promise
+  get-object-type-proxy
+  get-object-type-regexp
+  get-object-type-set
+  get-object-type-set-iterator
+  get-object-type-sharedarraybuffer
+  get-object-type-string-object
+  get-object-type-symbol-object
+  get-object-type-typedarray
+  get-object-type-weak-map
+  get-object-type-weak-ref
+  get-object-type-weak-set
   get-platform-identifier
   get-platform-limits
   get-platform-loop
@@ -172,6 +203,7 @@ list(APPEND tests
   get-value-string-utf8
   get-value-string-utf8-length
   get-value-string-utf8-no-null
+  get-value-string-utf8-truncate
   has-element
   has-own-property
   has-property
@@ -279,12 +311,16 @@ list(APPEND tests
   typeof-string
   typeof-symbol
   typeof-undefined
+  unwrap-from-prototype
+  unwrap-not-wrapped
   wasm
   wasm-async
   wasm-async-io
   wasm-async-io-multiple
   wrap
+  wrap-remove-then-unwrap
   wrap-remove-with-finalizer
+  wrap-twice
   wrap-with-finalizer
   wrap-with-reference
 )
@@ -344,6 +380,12 @@ list(APPEND skipped_tests
   symbol-for
 
   # Not supported
+  get-object-type-arguments
+  get-object-type-generator
+  get-object-type-map-iterator
+  get-object-type-module-namespace
+  get-object-type-proxy
+  get-object-type-set-iterator
   is-arguments
   is-float16array
   is-generator
@@ -372,6 +414,7 @@ list(APPEND skipped_tests
   create-sharedarraybuffer-with-backing-store
   create-external-sharedarraybuffer
   create-unsafe-sharedarraybuffer
+  get-object-type-sharedarraybuffer
   get-sharedarraybuffer-info
   is-sharedarraybuffer
 
