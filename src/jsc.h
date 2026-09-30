@@ -1,6 +1,7 @@
 #ifndef JSC_H
 #define JSC_H
 
+#include "jsc/ExtraSymbolsForTAPI.h"
 #include "jsc/JSBasePrivate.h"
 #include "jsc/JSContextPrivate.h"
 #include "jsc/JSContextRefPrivate.h"
