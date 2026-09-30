@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "JSContextRef.h"
+#include <JavaScriptCore/JSContextRef.h>
 
 extern "C" JS_EXPORT void JSSynchronousGarbageCollectForDebugging(JSContextRef);
 extern "C" JS_EXPORT void JSSynchronousEdenCollectForDebugging(JSContextRef);
