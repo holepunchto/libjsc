@@ -37,6 +37,8 @@ list(APPEND tests
   create-arraybuffer
   create-arraybuffer-too-large
   create-arraybuffer-with-backing-store
+  create-arraybuffer-with-backing-store-across-envs
+  create-arraybuffer-with-backing-store-across-envs-script
   create-bigint-int64
   create-bigint-words
   create-dataview
@@ -436,6 +438,11 @@ list(APPEND skipped_tests
   atomics-wait-timeout-notify
   create-promise-reject
   create-promise-resolve
+
+  # JavaScriptCore owns the memory of the buffers it allocates and offers no
+  # way to keep it alive past the environment the buffer was created in.
+  create-arraybuffer-with-backing-store-across-envs
+  create-arraybuffer-with-backing-store-across-envs-script
 
   # https://bugs.webkit.org/show_bug.cgi?id=257709
   create-sharedarraybuffer
