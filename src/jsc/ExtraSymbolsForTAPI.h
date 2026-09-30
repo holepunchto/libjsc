@@ -27,5 +27,13 @@
 
 #include <JavaScriptCore/JSContextRef.h>
 
-extern "C" JS_EXPORT void JSSynchronousGarbageCollectForDebugging(JSContextRef);
-extern "C" JS_EXPORT void JSSynchronousEdenCollectForDebugging(JSContextRef);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+JS_EXPORT void JSSynchronousGarbageCollectForDebugging(JSContextRef);
+JS_EXPORT void JSSynchronousEdenCollectForDebugging(JSContextRef);
+
+#ifdef __cplusplus
+}
+#endif
