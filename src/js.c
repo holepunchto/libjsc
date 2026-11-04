@@ -2685,11 +2685,17 @@ js_create_array_with_length(js_env_t *env, size_t len, js_value_t **result) {
 
   JSValueRef exception = NULL;
 
-  JSValueRef argv[] = {JSValueMakeNumber(env->context, (double) len)};
-
-  JSObjectRef array = JSObjectMakeArray(env->context, 1, argv, &exception);
+  JSObjectRef array = JSObjectMakeArray(env->context, 0, NULL, &exception);
 
   assert(exception == NULL);
+
+  JSStringRef ref = JSStringCreateWithUTF8CString("length");
+
+  JSObjectSetProperty(env->context, array, ref, JSValueMakeNumber(env->context, (double) len), kJSPropertyAttributeNone, &exception);
+
+  assert(exception == NULL);
+
+  JSStringRelease(ref);
 
   *result = (js_value_t *) array;
 
