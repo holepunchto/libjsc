@@ -4411,6 +4411,27 @@ js_get_global(js_env_t *env, js_value_t **result) {
 }
 
 int
+js_get_object_global(js_env_t *env, js_value_t *object, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSGlobalContextRef context = JSObjectGetGlobalContext((JSObjectRef) object);
+
+  JSValueRef value;
+
+  if (context) {
+    value = JSContextGetGlobalObject(context);
+  } else {
+    value = JSValueMakeNull(env->context);
+  }
+
+  *result = (js_value_t *) value;
+
+  js__attach_to_handle_scope(env, env->scope, value);
+
+  return 0;
+}
+
+int
 js_get_undefined(js_env_t *env, js_value_t **result) {
   // Allow continuing even with a pending exception
 
