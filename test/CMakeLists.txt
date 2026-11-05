@@ -64,7 +64,9 @@ list(APPEND tests
   create-external-arraybuffer
   create-external-arraybuffer-with-finalizer
   create-external-arraybuffer-with-finalizer-detach
+  create-external-arraybuffer-with-finalizer-null
   create-external-sharedarraybuffer
+  create-external-sharedarraybuffer-with-finalizer-null
   create-external-string-latin1
   create-external-string-latin1-with-finalizer
   create-external-string-utf8
@@ -132,6 +134,7 @@ list(APPEND tests
   create-typed-function-with-int64
   create-typed-function-with-number
   create-typed-function-with-pointer
+  create-typed-function-with-pointer-return
   create-typed-function-with-receiver
   create-typed-function-with-string-latin1
   create-typed-function-with-string-utf16le
@@ -156,6 +159,7 @@ list(APPEND tests
   dynamic-import-module-handler
   dynamic-import-script-handler
   dynamic-import-throw
+  dynamic-import-with-attributes
   dynamic-import-with-promise
   dynamic-import-with-referrer
   dynamic-import-with-referrer-function
@@ -234,6 +238,8 @@ list(APPEND tests
   import-meta
   import-meta-throw
   instantiate-module-evaluating
+  instantiate-module-throw-then-instantiate-other
+  instantiate-module-throw-then-retry
   inspector
   inspector-attach-context
   inspector-multiple-debugger-enable
@@ -306,6 +312,7 @@ list(APPEND tests
   run-module-in-context
   run-module-nested-import
   run-module-relative-import
+  run-module-synthetic-after-delete-other
   run-module-throw
   run-module-throw-then-clear
   run-module-uninstantiated
@@ -378,6 +385,7 @@ list(APPEND skipped_tests
   create-typed-function-with-int64
   create-typed-function-with-number
   create-typed-function-with-pointer
+  create-typed-function-with-pointer-return
   create-typed-function-with-receiver
   create-typed-function-with-string-latin1
   create-typed-function-with-string-utf16le
@@ -451,6 +459,7 @@ list(APPEND skipped_tests
   create-sharedarraybuffer-with-backing-store
   create-sharedarraybuffer-with-backing-store-across-envs
   create-external-sharedarraybuffer
+  create-external-sharedarraybuffer-with-finalizer-null
   create-unsafe-sharedarraybuffer
   get-object-type-sharedarraybuffer
   get-sharedarraybuffer-info
@@ -464,6 +473,7 @@ list(APPEND skipped_tests
   dynamic-import-module-handler
   dynamic-import-script-handler
   dynamic-import-throw
+  dynamic-import-with-attributes
   dynamic-import-with-promise
   dynamic-import-with-referrer
   dynamic-import-with-referrer-function
@@ -475,6 +485,8 @@ list(APPEND skipped_tests
   import-meta
   import-meta-throw
   instantiate-module-evaluating
+  instantiate-module-throw-then-instantiate-other
+  instantiate-module-throw-then-retry
   run-module
   run-module-async
   run-module-cyclic-import
@@ -483,6 +495,7 @@ list(APPEND skipped_tests
   run-module-evaluating
   run-module-in-context
   run-module-relative-import
+  run-module-synthetic-after-delete-other
   run-module-throw
   run-module-throw-then-clear
   run-module-uninstantiated
