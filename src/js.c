@@ -97,7 +97,6 @@ struct js_env_s {
   } callbacks;
 
   struct {
-    JSClassRef reference;
     JSClassRef wrap;
     JSClassRef finalizer;
     JSClassRef type_tag;
@@ -132,7 +131,7 @@ struct js_script_s {
 
 struct js_ref_s {
   JSValueRef value;
-  JSValueRef symbol;
+  JSWeakRef weak;
   uint32_t count;
 };
 
@@ -393,9 +392,6 @@ js__on_unhandled_rejection(js_env_t *env, js_callback_info_t *info) {
 }
 
 static void
-js__on_reference_finalize(JSObjectRef external);
-
-static void
 js__on_wrap_finalize(JSObjectRef external);
 
 static void
@@ -496,7 +492,6 @@ js__close_env(js_env_t *env) {
 
   JSValueUnprotect(env->context, env->function_id_key);
 
-  JSClassRelease(env->classes.reference);
   JSClassRelease(env->classes.wrap);
   JSClassRelease(env->classes.finalizer);
   JSClassRelease(env->classes.type_tag);
@@ -562,10 +557,6 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
 
   env->callbacks.unhandled_rejection = NULL;
   env->callbacks.unhandled_rejection_data = NULL;
-
-  env->classes.reference = JSClassCreate(&(JSClassDefinition){
-    .finalize = js__on_reference_finalize,
-  });
 
   env->classes.wrap = JSClassCreate(&(JSClassDefinition){
     .finalize = js__on_wrap_finalize,
@@ -1149,89 +1140,28 @@ js_run_module(js_env_t *env, js_module_t *module, js_value_t **result) {
   return js__error(env);
 }
 
-static void
-js__on_reference_finalize(JSObjectRef external) {
-  js_ref_t *reference = (js_ref_t *) JSObjectGetPrivate(external);
-
-  if (reference) reference->value = NULL;
-}
-
 static inline void
 js__set_weak_reference(js_env_t *env, js_ref_t *reference) {
-  if (reference->value == NULL) return;
+  if (reference->value == NULL || !JSValueIsObject(env->context, reference->value)) return;
 
-  if (!JSValueIsObject(env->context, reference->value)) return;
-
-  JSValueRef exception = NULL;
-
-  JSObjectRef external = JSObjectMake(env->context, env->classes.reference, (void *) reference);
-
-  JSStringRef ref = JSStringCreateWithUTF8CString("__native_reference");
-
-  JSValueRef symbol = JSValueMakeSymbol(env->context, ref);
-
-  JSStringRelease(ref);
-
-  JSValueProtect(env->context, symbol);
-
-  JSObjectSetPropertyForKey(
-    env->context,
-    (JSObjectRef) reference->value,
-    symbol,
-    external,
-    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
-    &exception
-  );
-
-  assert(exception == NULL);
-
-  JSValueRef installed = JSObjectGetPropertyForKey(env->context, (JSObjectRef) reference->value, symbol, &exception);
-
-  assert(exception == NULL);
-
-  if (!JSValueIsStrictEqual(env->context, installed, external)) {
-    JSObjectSetPrivate(external, NULL);
-
-    JSValueUnprotect(env->context, symbol);
-
-    return;
-  }
-
-  reference->symbol = symbol;
+  reference->weak = JSWeakCreate(env->group, (JSObjectRef) reference->value);
 
   JSValueUnprotect(env->context, reference->value);
+
+  reference->value = NULL;
 }
 
 static inline void
 js__clear_weak_reference(js_env_t *env, js_ref_t *reference) {
-  if (reference->symbol == NULL) return;
+  if (reference->weak == NULL) return;
 
-  if (reference->value) {
-    JSValueRef exception = NULL;
+  reference->value = JSWeakGetObject(reference->weak);
 
-    JSValueProtect(env->context, reference->value);
+  if (reference->value) JSValueProtect(env->context, reference->value);
 
-    JSValueRef external = JSObjectGetPropertyForKey(
-      env->context,
-      (JSObjectRef) reference->value,
-      reference->symbol,
-      &exception
-    );
+  JSWeakRelease(env->group, reference->weak);
 
-    assert(exception == NULL);
-
-    if (JSValueIsObjectOfClass(env->context, external, env->classes.reference)) {
-      JSObjectSetPrivate((JSObjectRef) external, NULL);
-    }
-
-    JSObjectDeletePropertyForKey(env->context, (JSObjectRef) reference->value, reference->symbol, &exception);
-
-    assert(exception == NULL);
-  }
-
-  JSValueUnprotect(env->context, reference->symbol);
-
-  reference->symbol = NULL;
+  reference->weak = NULL;
 }
 
 int
@@ -1241,8 +1171,8 @@ js_create_reference(js_env_t *env, js_value_t *value, uint32_t count, js_ref_t *
   js_ref_t *reference = malloc(sizeof(js_ref_t));
 
   reference->value = (JSValueRef) value;
+  reference->weak = NULL;
   reference->count = count;
-  reference->symbol = NULL;
 
   JSValueProtect(env->context, reference->value);
 
@@ -1257,7 +1187,7 @@ int
 js_delete_reference(js_env_t *env, js_ref_t *reference) {
   // Allow continuing even with a pending exception
 
-  if (reference->count == 0) js__clear_weak_reference(env, reference);
+  if (reference->weak) JSWeakRelease(env->group, reference->weak);
 
   if (reference->value) JSValueUnprotect(env->context, reference->value);
 
@@ -1298,11 +1228,13 @@ int
 js_get_reference_value(js_env_t *env, js_ref_t *reference, js_value_t **result) {
   // Allow continuing even with a pending exception
 
-  if (reference->value == NULL) *result = NULL;
-  else {
-    *result = (js_value_t *) reference->value;
+  JSValueRef value = reference->weak ? JSWeakGetObject(reference->weak) : reference->value;
 
-    js__attach_to_handle_scope(env, env->scope, reference->value);
+  if (value == NULL) *result = NULL;
+  else {
+    *result = (js_value_t *) value;
+
+    js__attach_to_handle_scope(env, env->scope, value);
   }
 
   return 0;
