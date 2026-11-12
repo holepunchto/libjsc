@@ -27,6 +27,7 @@ typedef struct js_delegate_s js_delegate_t;
 typedef struct js_threadsafe_queue_s js_threadsafe_queue_t;
 typedef struct js_teardown_task_s js_teardown_task_t;
 typedef struct js_teardown_queue_s js_teardown_queue_t;
+typedef struct js_rejection_s js_rejection_t;
 
 struct js_deferred_teardown_s {
   js_env_t *env;
@@ -77,6 +78,9 @@ struct js_env_s {
   JSGlobalContextRef context;
   JSValueRef exception;
   JSObjectRef bindings;
+  JSValueRef continuation_snapshot;
+  js_continuation_scope_t *continuation_scope;
+  js_rejection_t *rejections;
 
   JSValueRef default_module_id;
   JSValueRef function_id_key;
@@ -116,6 +120,17 @@ struct js_handle_scope_s {
   size_t capacity;
 };
 
+struct js_continuation_scope_s {
+  js_continuation_scope_t *parent;
+  JSValueRef previous;
+};
+
+struct js_rejection_s {
+  JSValueRef promise;
+  JSValueRef snapshot;
+  js_rejection_t *next;
+};
+
 struct js_escapable_handle_scope_s {
   js_handle_scope_t *parent;
 };
@@ -138,6 +153,7 @@ struct js_ref_s {
 };
 
 struct js_deferred_s {
+  JSObjectRef promise;
   JSObjectRef resolve;
   JSObjectRef reject;
 };
@@ -369,11 +385,114 @@ js__on_uncaught_exception(js_env_t *env, js_value_t *error) {
   }
 }
 
+static inline JSValueRef
+js__swap_continuation_snapshot(js_env_t *env, JSValueRef snapshot) {
+  JSValueRef previous = env->continuation_snapshot;
+
+  env->continuation_snapshot = snapshot;
+
+  return previous;
+}
+
+static inline void
+js__open_continuation_scope(js_env_t *env, JSValueRef snapshot, js_continuation_scope_t **result) {
+  js_continuation_scope_t *scope = malloc(sizeof(js_continuation_scope_t));
+
+  scope->parent = env->continuation_scope;
+  scope->previous = js__swap_continuation_snapshot(env, snapshot);
+
+  env->continuation_scope = scope;
+
+  *result = scope;
+}
+
+static inline void
+js__close_continuation_scope(js_env_t *env, js_continuation_scope_t *scope) {
+  assert(scope == env->continuation_scope);
+
+  js__swap_continuation_snapshot(env, scope->previous);
+
+  env->continuation_scope = scope->parent;
+
+  free(scope);
+}
+
+static inline void
+js__finalize(js_env_t *env, js_finalize_cb cb, void *data, void *hint) {
+  JSValueRef previous = js__swap_continuation_snapshot(env, JSValueMakeUndefined(env->context));
+
+  cb(env, data, hint);
+
+  js__swap_continuation_snapshot(env, previous);
+}
+
+static inline void
+js__push_rejection(js_env_t *env, JSValueRef promise) {
+  js_rejection_t *rejection = malloc(sizeof(js_rejection_t));
+
+  rejection->promise = promise;
+  rejection->snapshot = env->continuation_snapshot;
+  rejection->next = env->rejections;
+
+  JSValueProtect(env->context, rejection->promise);
+  JSValueProtect(env->context, rejection->snapshot);
+
+  env->rejections = rejection;
+}
+
+static inline void
+js__free_rejection(js_env_t *env, js_rejection_t *rejection) {
+  JSValueUnprotect(env->context, rejection->promise);
+  JSValueUnprotect(env->context, rejection->snapshot);
+
+  free(rejection);
+}
+
+static inline void
+js__free_rejections(js_env_t *env, js_rejection_t *rejection) {
+  while (rejection) {
+    js_rejection_t *next = rejection->next;
+
+    js__free_rejection(env, rejection);
+
+    rejection = next;
+  }
+}
+
+static inline void
+js__clear_rejections(js_env_t *env) {
+  js__free_rejections(env, env->rejections);
+
+  env->rejections = NULL;
+}
+
+static inline js_rejection_t *
+js__take_rejection(js_env_t *env, JSValueRef promise) {
+  for (js_rejection_t **next = &env->rejections; *next; next = &(*next)->next) {
+    js_rejection_t *rejection = *next;
+
+    if (rejection->promise == promise) {
+      *next = NULL;
+
+      // The engine reports rejections in the order they happened, and records
+      // are kept newest first, so any older record left behind belongs to a
+      // promise that was handled before it could be reported.
+      js__free_rejections(env, rejection->next);
+
+      return rejection;
+    }
+  }
+
+  return NULL;
+}
+
 static JSValueRef
 js__on_unhandled_rejection(JSContextRef context, JSObjectRef function, JSObjectRef receiver, size_t argc, const JSValueRef argv[], JSValueRef *exception) {
   int err;
 
   js_env_t *env = (js_env_t *) JSObjectGetPrivate(function);
+
+  js_rejection_t *rejection = js__take_rejection(env, argv[0]);
 
   // JavaScriptCore reports every rejection in one go and discards exceptions
   // thrown by the callback, so a pending exception is left for the embedder and
@@ -383,15 +502,23 @@ js__on_unhandled_rejection(JSContextRef context, JSObjectRef function, JSObjectR
     err = js_open_handle_scope(env, &scope);
     assert(err == 0);
 
+    JSValueRef previous = env->continuation_snapshot;
+
+    if (rejection) js__swap_continuation_snapshot(env, rejection->snapshot);
+
     env->depth++;
 
     env->callbacks.unhandled_rejection(env, (js_value_t *) argv[1], (js_value_t *) argv[0], env->callbacks.unhandled_rejection_data);
 
     env->depth--;
 
+    js__swap_continuation_snapshot(env, previous);
+
     err = js_close_handle_scope(env, scope);
     assert(err == 0);
   }
+
+  if (rejection) js__free_rejection(env, rejection);
 
   return JSValueMakeUndefined(context);
 }
@@ -509,6 +636,12 @@ js__on_handle_close(uv_handle_t *handle) {
 
 static void
 js__close_env(js_env_t *env) {
+  js__clear_rejections(env);
+
+  while (env->continuation_scope) {
+    js__close_continuation_scope(env, env->continuation_scope);
+  }
+
   if (env->default_module_id) JSValueUnprotect(env->context, env->default_module_id);
 
   JSValueUnprotect(env->context, env->function_id_key);
@@ -557,6 +690,9 @@ js_create_env(uv_loop_t *loop, js_platform_t *platform, const js_env_options_t *
   env->context = context;
   env->exception = NULL;
   env->bindings = JSObjectMake(context, NULL, NULL);
+  env->continuation_snapshot = JSValueMakeUndefined(context);
+  env->continuation_scope = NULL;
+  env->rejections = NULL;
 
   env->default_module_id = NULL;
 
@@ -1499,7 +1635,7 @@ js__on_wrap_finalize(JSObjectRef external) {
   if (finalizer == NULL) return;
 
   if (finalizer->finalize_cb) {
-    finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
+    js__finalize(finalizer->env, finalizer->finalize_cb, finalizer->data, finalizer->finalize_hint);
   }
 
   free(finalizer);
@@ -1795,7 +1931,7 @@ js__on_delegate_finalize(JSObjectRef object) {
   js_delegate_t *delegate = (js_delegate_t *) JSObjectGetPrivate(object);
 
   if (delegate->finalize_cb) {
-    delegate->finalize_cb(delegate->env, delegate->data, delegate->finalize_hint);
+    js__finalize(delegate->env, delegate->finalize_cb, delegate->data, delegate->finalize_hint);
   }
 
   free(delegate);
@@ -1832,7 +1968,7 @@ js__on_finalizer_finalize(JSObjectRef external) {
     js_finalizer_t *finalizer = &next->finalizer;
 
     if (finalizer->finalize_cb) {
-      finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
+      js__finalize(finalizer->env, finalizer->finalize_cb, finalizer->data, finalizer->finalize_hint);
     }
 
     prev = next;
@@ -2687,7 +2823,7 @@ js__on_external_finalize(JSObjectRef external) {
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate(external);
 
   if (finalizer->finalize_cb) {
-    finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
+    js__finalize(finalizer->env, finalizer->finalize_cb, finalizer->data, finalizer->finalize_hint);
   }
 
   free(finalizer);
@@ -2951,6 +3087,7 @@ js_create_promise(js_env_t *env, js_deferred_t **deferred, js_value_t **promise)
 
   js_deferred_t *result = malloc(sizeof(js_deferred_t));
 
+  result->promise = value;
   result->resolve = resolve;
   result->reject = reject;
 
@@ -2990,6 +3127,10 @@ int
 js_reject_deferred(js_env_t *env, js_deferred_t *deferred, js_value_t *resolution) {
   if (env->exception) return js__error(env);
 
+  // The engine reports unhandled rejections only once its microtask queue is
+  // drained, so the snapshot is captured here instead.
+  if (env->callbacks.unhandled_rejection) js__push_rejection(env, deferred->promise);
+
   JSValueRef argv[] = {(JSValueRef) resolution};
 
   JSValueRef exception = NULL;
@@ -2999,6 +3140,10 @@ js_reject_deferred(js_env_t *env, js_deferred_t *deferred, js_value_t *resolutio
   JSObjectCallAsFunction(env->context, deferred->reject, NULL, 1, argv, &exception);
 
   env->depth--;
+
+  // Outside of a call into JavaScript, the queue was drained as the call above
+  // returned, so every rejection so far has been reported or handled.
+  if (env->depth == 0) js__clear_rejections(env);
 
   free(deferred);
 
@@ -3126,7 +3271,7 @@ js__on_external_arraybuffer_finalize(void *bytes, void *deallocatorContext) {
   js_finalizer_t *finalizer = (js_finalizer_t *) deallocatorContext;
 
   if (finalizer->finalize_cb) {
-    finalizer->finalize_cb(finalizer->env, finalizer->data, finalizer->finalize_hint);
+    js__finalize(finalizer->env, finalizer->finalize_cb, finalizer->data, finalizer->finalize_hint);
   }
 
   free(finalizer);
@@ -4352,6 +4497,127 @@ js_strict_equals(js_env_t *env, js_value_t *a, js_value_t *b, bool *result) {
   // Allow continuing even with a pending exception
 
   *result = JSValueIsStrictEqual(env->context, (JSValueRef) a, (JSValueRef) b);
+
+  return 0;
+}
+
+int
+js_get_continuation_snapshot(js_env_t *env, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  *result = (js_value_t *) env->continuation_snapshot;
+
+  js__attach_to_handle_scope(env, env->scope, env->continuation_snapshot);
+
+  return 0;
+}
+
+int
+js_open_continuation_scope(js_env_t *env, js_value_t *snapshot, js_continuation_scope_t **result) {
+  // Allow continuing even with a pending exception
+
+  if (snapshot == NULL) snapshot = (js_value_t *) JSValueMakeUndefined(env->context);
+
+  js__open_continuation_scope(env, (JSValueRef) snapshot, result);
+
+  return 0;
+}
+
+int
+js_close_continuation_scope(js_env_t *env, js_continuation_scope_t *scope) {
+  // Allow continuing even with a pending exception
+
+  js__close_continuation_scope(env, scope);
+
+  return 0;
+}
+
+static inline JSValueRef
+js__get_continuation_snapshot_entry(js_env_t *env, uint32_t index) {
+  if (JSValueIsUndefined(env->context, env->continuation_snapshot)) {
+    return JSValueMakeUndefined(env->context);
+  }
+
+  JSValueRef exception = NULL;
+
+  JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) env->continuation_snapshot, index, &exception);
+
+  assert(exception == NULL);
+
+  return value;
+}
+
+int
+js_get_continuation_variable(js_env_t *env, js_value_t *symbol, js_value_t **result) {
+  // Allow continuing even with a pending exception
+
+  JSValueRef value = NULL;
+
+  for (uint32_t i = 0; value == NULL; i += 2) {
+    JSValueRef key = js__get_continuation_snapshot_entry(env, i);
+
+    if (key == (JSValueRef) symbol) value = js__get_continuation_snapshot_entry(env, i + 1);
+    else if (JSValueIsUndefined(env->context, key)) value = key;
+  }
+
+  *result = (js_value_t *) value;
+
+  js__attach_to_handle_scope(env, env->scope, value);
+
+  return 0;
+}
+
+int
+js_open_continuation_variable_scope(js_env_t *env, js_value_t *symbol, js_value_t *value, js_continuation_scope_t **result) {
+  // Allow continuing even with a pending exception
+
+  size_t len = 0, capacity = 8;
+
+  JSValueRef *entries = malloc(capacity * sizeof(JSValueRef));
+
+  for (uint32_t i = 0;; i += 2) {
+    JSValueRef key = js__get_continuation_snapshot_entry(env, i);
+
+    if (JSValueIsUndefined(env->context, key)) break;
+
+    if (key == (JSValueRef) symbol) continue;
+
+    if (len + 5 > capacity) {
+      capacity *= 2;
+
+      entries = realloc(entries, capacity * sizeof(JSValueRef));
+    }
+
+    entries[len++] = key;
+    entries[len++] = js__get_continuation_snapshot_entry(env, i + 1);
+  }
+
+  if (!JSValueIsUndefined(env->context, (JSValueRef) value)) {
+    entries[len++] = (JSValueRef) symbol;
+    entries[len++] = (JSValueRef) value;
+  }
+
+  JSValueRef snapshot;
+
+  if (len) {
+    // End the snapshot with an undefined element so that walking it never
+    // reads past its end, where a getter on the prototype could run.
+    entries[len++] = JSValueMakeUndefined(env->context);
+
+    JSValueRef exception = NULL;
+
+    snapshot = JSObjectMakeArray(env->context, len, entries, &exception);
+
+    assert(exception == NULL);
+
+    js__attach_to_handle_scope(env, env->scope, snapshot);
+  } else {
+    snapshot = JSValueMakeUndefined(env->context);
+  }
+
+  free(entries);
+
+  js__open_continuation_scope(env, snapshot, result);
 
   return 0;
 }
