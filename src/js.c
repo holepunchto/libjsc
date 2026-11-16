@@ -1168,7 +1168,7 @@ js_run_script(js_env_t *env, const char *file, size_t len, int offset, js_value_
 
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) source, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   if (file == NULL) file = "";
 
@@ -1199,8 +1199,6 @@ int
 js_prepare_script(js_env_t *env, const char *file, size_t len, int offset, js_value_t *source, js_script_t **result) {
   if (env->exception) return js__error(env);
 
-  int err;
-
   if (file == NULL) file = "";
 
   JSStringRef url = JSStringCreateWithUTF8CString(file);
@@ -1225,15 +1223,13 @@ js_prepare_script(js_env_t *env, const char *file, size_t len, int offset, js_va
 
       JSStringGetUTF8CString(error_message, message, size);
 
-      err = js_throw_error(env, NULL, message);
-      assert(err == 0);
+      js_throw_error(env, NULL, message);
 
       free(message);
 
       JSStringRelease(error_message);
     } else {
-      err = js_throw_error(env, NULL, "Could not compile script");
-      assert(err == 0);
+      js_throw_error(env, NULL, "Could not compile script");
     }
 
     JSStringRelease(url);
@@ -1270,10 +1266,7 @@ js_prepare_script_with_code_cache(js_env_t *env, const char *file, size_t len, i
 
 int
 js_create_script_code_cache(js_env_t *env, js_script_t *script, void **data, size_t *len) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1345,10 +1338,7 @@ js_on_script_dynamic_import(js_env_t *env, js_script_t *script, js_dynamic_impor
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_create_module(js_env_t *env, const char *name, size_t len, int offset, js_value_t *source, js_module_meta_cb cb, void *data, js_module_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1362,10 +1352,7 @@ js_create_module_with_code_cache(js_env_t *env, const char *name, size_t len, in
 
 int
 js_create_module_code_cache(js_env_t *env, js_module_t *module, void **data, size_t *len) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1373,10 +1360,7 @@ js_create_module_code_cache(js_env_t *env, js_module_t *module, void **data, siz
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_create_synthetic_module(js_env_t *env, const char *name, size_t len, js_value_t *const export_names[], size_t names_len, js_module_evaluate_cb cb, void *data, js_module_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1384,10 +1368,7 @@ js_create_synthetic_module(js_env_t *env, const char *name, size_t len, js_value
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_delete_module(js_env_t *env, js_module_t *module) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1395,10 +1376,7 @@ js_delete_module(js_env_t *env, js_module_t *module) {
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_get_module_name(js_env_t *env, js_module_t *module, const char **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1424,10 +1402,7 @@ js__default_module_id(js_env_t *env) {
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_get_module_id(js_env_t *env, js_module_t *module, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1454,10 +1429,7 @@ js_on_module_dynamic_import(js_env_t *env, js_module_t *module, js_dynamic_impor
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_get_module_namespace(js_env_t *env, js_module_t *module, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1465,10 +1437,7 @@ js_get_module_namespace(js_env_t *env, js_module_t *module, js_value_t **result)
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_set_module_export(js_env_t *env, js_module_t *module, js_value_t *name, js_value_t *value) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1476,10 +1445,7 @@ js_set_module_export(js_env_t *env, js_module_t *module, js_value_t *name, js_va
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_instantiate_module(js_env_t *env, js_module_t *module, js_module_resolve_cb cb, void *data) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1487,10 +1453,7 @@ js_instantiate_module(js_env_t *env, js_module_t *module, js_module_resolve_cb c
 // https://bugs.webkit.org/show_bug.cgi?id=261600
 int
 js_run_module(js_env_t *env, js_module_t *module, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -1667,8 +1630,6 @@ js_define_class(js_env_t *env, const char *name, size_t len, js_function_cb cons
 
   int err;
 
-  JSValueRef exception = NULL;
-
   JSStringRef ref;
 
   JSObjectRef class = JSObjectMakeConstructor(env->context, NULL, js__on_constructor_call);
@@ -1802,20 +1763,20 @@ js_define_properties(js_env_t *env, js_value_t *object, js_property_descriptor_t
       if (property->getter) {
         js_value_t *fn;
         err = js_create_function(env, "fn", -1, property->getter, property->data, &fn);
-        assert(err == 0);
+        if (err < 0) return err;
       }
 
       if (property->setter) {
         js_value_t *fn;
         err = js_create_function(env, "fn", -1, property->setter, property->data, &fn);
-        assert(err == 0);
+        if (err < 0) return err;
       }
 
       return js__error(env);
     } else if (property->method) {
       js_value_t *fn;
       err = js_create_function(env, "fn", -1, property->method, property->data, &fn);
-      assert(err == 0);
+      if (err < 0) return err;
 
       value = (JSValueRef) fn;
     } else {
@@ -1868,8 +1829,6 @@ int
 js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_cb, void *finalize_hint, js_ref_t **result) {
   if (env->exception) return js__error(env);
 
-  int err;
-
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_external");
 
   JSValueRef wrapped = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
@@ -1893,8 +1852,7 @@ js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_c
   if (exists) {
     JSStringRelease(ref);
 
-    err = js_throw_errorf(env, NULL, "Object is already wrapped");
-    assert(err == 0);
+    js_throw_errorf(env, NULL, "Object is already wrapped");
 
     return js__error(env);
   }
@@ -1938,8 +1896,7 @@ js_wrap(js_env_t *env, js_value_t *object, void *data, js_finalize_cb finalize_c
   if (!JSValueIsStrictEqual(env->context, installed, external)) {
     free(finalizer);
 
-    err = js_throw_errorf(env, NULL, "Object could not be wrapped");
-    assert(err == 0);
+    js_throw_errorf(env, NULL, "Object could not be wrapped");
 
     return js__error(env);
   }
@@ -1965,8 +1922,6 @@ js_unwrap(js_env_t *env, js_value_t *object, void **result) {
     return js__propagate_exception(env);
   }
 
-  int err;
-
   bool wrapped = JSValueIsObjectOfClass(env->context, external, env->classes.wrap) &&
                  js__is_own_property(env, (JSObjectRef) object, ref, external, &env->exception);
 
@@ -1975,8 +1930,7 @@ js_unwrap(js_env_t *env, js_value_t *object, void **result) {
   if (env->exception) return js__propagate_exception(env);
 
   if (!wrapped) {
-    err = js_throw_type_error(env, NULL, "Object is not wrapped");
-    assert(err == 0);
+    js_throw_type_error(env, NULL, "Object is not wrapped");
 
     return js__error(env);
   }
@@ -1984,8 +1938,7 @@ js_unwrap(js_env_t *env, js_value_t *object, void **result) {
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
 
   if (finalizer == NULL) {
-    err = js_throw_type_error(env, NULL, "Object is not wrapped");
-    assert(err == 0);
+    js_throw_type_error(env, NULL, "Object is not wrapped");
 
     return js__error(env);
   }
@@ -2009,8 +1962,6 @@ js_remove_wrap(js_env_t *env, js_value_t *object, void **result) {
     return js__propagate_exception(env);
   }
 
-  int err;
-
   bool wrapped = JSValueIsObjectOfClass(env->context, external, env->classes.wrap) &&
                  js__is_own_property(env, (JSObjectRef) object, ref, external, &env->exception);
 
@@ -2019,8 +1970,7 @@ js_remove_wrap(js_env_t *env, js_value_t *object, void **result) {
   if (env->exception) return js__propagate_exception(env);
 
   if (!wrapped) {
-    err = js_throw_type_error(env, NULL, "Object is not wrapped");
-    assert(err == 0);
+    js_throw_type_error(env, NULL, "Object is not wrapped");
 
     return js__error(env);
   }
@@ -2028,8 +1978,7 @@ js_remove_wrap(js_env_t *env, js_value_t *object, void **result) {
   js_finalizer_t *finalizer = (js_finalizer_t *) JSObjectGetPrivate((JSObjectRef) external);
 
   if (finalizer == NULL) {
-    err = js_throw_type_error(env, NULL, "Object is not wrapped");
-    assert(err == 0);
+    js_throw_type_error(env, NULL, "Object is not wrapped");
 
     return js__error(env);
   }
@@ -2162,16 +2111,20 @@ js__on_delegate_get_property_names(JSContextRef context, JSObjectRef object, JSP
 
     int err;
 
+    // The exceptions cannot be reported to JavaScriptCore, so they are left
+    // pending on the environment.
     uint32_t len;
     err = js_get_array_length(env, result, &len);
-    assert(err == 0);
 
-    for (size_t i = 0; i < len; i++) {
+    for (size_t i = 0; err == 0 && i < len; i++) {
       js_value_t *name;
       err = js_get_element(env, result, i, &name);
-      assert(err == 0);
+
+      if (err < 0) break;
 
       JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) name, NULL);
+
+      if (ref == NULL) break;
 
       JSPropertyNameAccumulatorAddName(properties, ref);
 
@@ -2311,8 +2264,6 @@ int
 js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
   if (env->exception) return js__error(env);
 
-  int err;
-
   JSStringRef ref = JSStringCreateWithUTF8CString("__native_type_tag");
 
   JSValueRef tagged = JSObjectGetProperty(env->context, (JSObjectRef) object, ref, &env->exception);
@@ -2335,8 +2286,7 @@ js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
   if (exists) {
     JSStringRelease(ref);
 
-    err = js_throw_errorf(env, NULL, "Object is already type tagged");
-    assert(err == 0);
+    js_throw_errorf(env, NULL, "Object is already type tagged");
 
     return js__error(env);
   }
@@ -2370,8 +2320,7 @@ js_add_type_tag(js_env_t *env, js_value_t *object, const js_type_tag_t *tag) {
   if (env->exception) return js__propagate_exception(env);
 
   if (!JSValueIsStrictEqual(env->context, installed, external)) {
-    err = js_throw_errorf(env, NULL, "Object could not be type tagged");
-    assert(err == 0);
+    js_throw_errorf(env, NULL, "Object could not be type tagged");
 
     return js__error(env);
   }
@@ -2527,22 +2476,16 @@ js_create_bigint_uint64(js_env_t *env, uint64_t value, js_value_t **result) {
 
 int
 js_create_bigint_words(js_env_t *env, int sign, const uint64_t *words, size_t len, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
 
 static inline int
 js__check_string_length(js_env_t *env, size_t len) {
-  int err;
-
   if (len == (size_t) -1 || len <= INT_MAX) return 0;
 
-  err = js_throw_range_error(env, NULL, "Invalid string length");
-  assert(err == 0);
+  js_throw_range_error(env, NULL, "Invalid string length");
 
   return js__error(env);
 }
@@ -2705,7 +2648,7 @@ js_create_symbol(js_env_t *env, js_value_t *description, js_value_t **result) {
 
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) description, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   JSValueRef symbol = JSValueMakeSymbol(env->context, ref);
 
@@ -2720,10 +2663,7 @@ js_create_symbol(js_env_t *env, js_value_t *description, js_value_t **result) {
 
 int
 js_symbol_for(js_env_t *env, const char *description, size_t len, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -2849,8 +2789,6 @@ int
 js_create_function(js_env_t *env, const char *name, size_t len, js_function_cb cb, void *data, js_value_t **result) {
   if (env->exception) return js__error(env);
 
-  JSValueRef exception = NULL;
-
   JSStringRef ref;
 
   if (name == NULL) {
@@ -2903,8 +2841,6 @@ int
 js_compile_function(js_env_t *env, const char *name, size_t name_len, const char *file, size_t file_len, js_value_t *const args[], size_t args_len, int offset, js_value_t *source, js_value_t **result) {
   if (env->exception) return js__error(env);
 
-  int err;
-
   JSStringRef name_ref, file_ref;
 
   if (name == NULL) {
@@ -2949,8 +2885,7 @@ js_compile_function(js_env_t *env, const char *name, size_t name_len, const char
     JSStringRelease(length_ref);
 
     if (JSValueToNumber(env->context, length, NULL) != (double) args_len) {
-      err = js_throw_error(env, NULL, "Could not compile function");
-      assert(err == 0);
+      js_throw_error(env, NULL, "Could not compile function");
     }
   }
 
@@ -2997,10 +2932,7 @@ js_compile_function_with_code_cache(js_env_t *env, const char *name, size_t name
 
 int
 js_create_function_code_cache(js_env_t *env, js_value_t *function, void **data, size_t *len) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -3034,7 +2966,7 @@ js_get_function_id(js_env_t *env, js_value_t *function, js_value_t **result) {
 
   JSValueRef id = JSObjectGetPropertyForKey(env->context, (JSObjectRef) function, env->function_id_key, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   if (!JSValueIsSymbol(env->context, id)) id = js__default_module_id(env);
 
@@ -3053,7 +2985,7 @@ js_create_array(js_env_t *env, js_value_t **result) {
 
   JSObjectRef array = JSObjectMakeArray(env->context, 0, NULL, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = (js_value_t *) array;
 
@@ -3070,7 +3002,7 @@ js_create_array_with_length(js_env_t *env, size_t len, js_value_t **result) {
 
   JSObjectRef array = JSObjectMakeArray(env->context, 0, NULL, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   JSStringRef ref = JSStringCreateWithUTF8CString("length");
 
@@ -3095,7 +3027,7 @@ js_create_array_with_elements(js_env_t *env, js_value_t *const elements[], size_
 
   JSObjectRef array = JSObjectMakeArray(env->context, element_count, (const JSValueRef *) elements, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = (js_value_t *) array;
 
@@ -3177,7 +3109,7 @@ js_create_error(js_env_t *env, js_value_t *code, js_value_t *message, js_value_t
 
   JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   if (code) {
     int err = js__set_code(env, error, (JSValueRef) code);
@@ -3313,7 +3245,7 @@ js_create_promise(js_env_t *env, js_deferred_t **deferred, js_value_t **promise)
 
   JSObjectRef value = JSObjectMakeDeferredPromise(env->context, &resolve, &reject, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   js_deferred_t *result = malloc(sizeof(js_deferred_t));
 
@@ -3386,10 +3318,7 @@ js_reject_deferred(js_env_t *env, js_deferred_t *deferred, js_value_t *resolutio
 // https://bugs.webkit.org/show_bug.cgi?id=250554
 int
 js_get_promise_state(js_env_t *env, js_value_t *promise, js_promise_state_t *result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -3397,10 +3326,7 @@ js_get_promise_state(js_env_t *env, js_value_t *promise, js_promise_state_t *res
 // https://bugs.webkit.org/show_bug.cgi?id=250554
 int
 js_get_promise_result(js_env_t *env, js_value_t *promise, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -3552,11 +3478,13 @@ js_get_arraybuffer_backing_store(js_env_t *env, js_value_t *arraybuffer, js_arra
 
   backing_store->data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &exception);
 
-  assert(exception == NULL);
+  if (exception == NULL) backing_store->len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &exception);
 
-  backing_store->len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &exception);
+  if (exception) {
+    free(backing_store);
 
-  assert(exception == NULL);
+    return js__propagate_exception_unless_pending(env, exception);
+  }
 
   backing_store->owner = (JSValueRef) arraybuffer;
 
@@ -3570,10 +3498,7 @@ js_get_arraybuffer_backing_store(js_env_t *env, js_value_t *arraybuffer, js_arra
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -3581,10 +3506,7 @@ js_create_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_value_t *
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_sharedarraybuffer_with_backing_store(js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -3592,10 +3514,7 @@ js_create_sharedarraybuffer_with_backing_store(js_env_t *env, js_arraybuffer_bac
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_unsafe_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -3603,10 +3522,7 @@ js_create_unsafe_sharedarraybuffer(js_env_t *env, size_t len, void **data, js_va
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_create_external_sharedarraybuffer(js_env_t *env, void *data, size_t len, js_finalize_cb finalize_cb, void *finalize_hint, js_value_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -3614,10 +3530,7 @@ js_create_external_sharedarraybuffer(js_env_t *env, void *data, size_t len, js_f
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_get_sharedarraybuffer_backing_store(js_env_t *env, js_value_t *sharedarraybuffer, js_arraybuffer_backing_store_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -3929,7 +3842,7 @@ js_is_int32(js_env_t *env, js_value_t *value, bool *result) {
 
     double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     double integral;
 
@@ -3950,7 +3863,7 @@ js_is_uint32(js_env_t *env, js_value_t *value, bool *result) {
 
     double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     double integral;
 
@@ -4229,7 +4142,7 @@ js_is_arraybuffer(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeArrayBuffer;
 
@@ -4291,7 +4204,7 @@ js_is_typedarray(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type != kJSTypedArrayTypeNone && type != kJSTypedArrayTypeArrayBuffer;
 
@@ -4306,7 +4219,7 @@ js_is_int8array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeInt8Array;
 
@@ -4321,7 +4234,7 @@ js_is_uint8array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeUint8Array;
 
@@ -4336,7 +4249,7 @@ js_is_uint8clampedarray(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeUint8ClampedArray;
 
@@ -4351,7 +4264,7 @@ js_is_int16array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeInt16Array;
 
@@ -4366,7 +4279,7 @@ js_is_uint16array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeUint16Array;
 
@@ -4381,7 +4294,7 @@ js_is_int32array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeInt32Array;
 
@@ -4396,7 +4309,7 @@ js_is_uint32array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeUint32Array;
 
@@ -4420,7 +4333,7 @@ js_is_float32array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeFloat32Array;
 
@@ -4435,7 +4348,7 @@ js_is_float64array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeFloat64Array;
 
@@ -4450,7 +4363,7 @@ js_is_bigint64array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeBigInt64Array;
 
@@ -4465,7 +4378,7 @@ js_is_biguint64array(js_env_t *env, js_value_t *value, bool *result) {
 
   JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = type == kJSTypedArrayTypeBigUint64Array;
 
@@ -4582,32 +4495,32 @@ js_close_continuation_scope(js_env_t *env, js_continuation_scope_t *scope) {
 }
 
 static inline JSValueRef
-js__get_continuation_snapshot_entry(js_env_t *env, uint32_t index) {
+js__get_continuation_snapshot_entry(js_env_t *env, uint32_t index, JSValueRef *exception) {
   if (JSValueIsUndefined(env->context, env->continuation_snapshot)) {
     return JSValueMakeUndefined(env->context);
   }
 
-  JSValueRef exception = NULL;
-
-  JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) env->continuation_snapshot, index, &exception);
-
-  assert(exception == NULL);
-
-  return value;
+  return JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) env->continuation_snapshot, index, exception);
 }
 
 int
 js_get_continuation_variable(js_env_t *env, js_value_t *symbol, js_value_t **result) {
   // Allow continuing even with a pending exception
 
+  JSValueRef exception = NULL;
+
   JSValueRef value = NULL;
 
-  for (uint32_t i = 0; value == NULL; i += 2) {
-    JSValueRef key = js__get_continuation_snapshot_entry(env, i);
+  for (uint32_t i = 0; value == NULL && exception == NULL; i += 2) {
+    JSValueRef key = js__get_continuation_snapshot_entry(env, i, &exception);
 
-    if (key == (JSValueRef) symbol) value = js__get_continuation_snapshot_entry(env, i + 1);
+    if (exception) break;
+
+    if (key == (JSValueRef) symbol) value = js__get_continuation_snapshot_entry(env, i + 1, &exception);
     else if (JSValueIsUndefined(env->context, key)) value = key;
   }
+
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = (js_value_t *) value;
 
@@ -4624,10 +4537,12 @@ js_open_continuation_variable_scope(js_env_t *env, js_value_t *symbol, js_value_
 
   JSValueRef *entries = malloc(capacity * sizeof(JSValueRef));
 
-  for (uint32_t i = 0;; i += 2) {
-    JSValueRef key = js__get_continuation_snapshot_entry(env, i);
+  JSValueRef exception = NULL;
 
-    if (JSValueIsUndefined(env->context, key)) break;
+  for (uint32_t i = 0;; i += 2) {
+    JSValueRef key = js__get_continuation_snapshot_entry(env, i, &exception);
+
+    if (exception || JSValueIsUndefined(env->context, key)) break;
 
     if (key == (JSValueRef) symbol) continue;
 
@@ -4638,7 +4553,15 @@ js_open_continuation_variable_scope(js_env_t *env, js_value_t *symbol, js_value_
     }
 
     entries[len++] = key;
-    entries[len++] = js__get_continuation_snapshot_entry(env, i + 1);
+    entries[len++] = js__get_continuation_snapshot_entry(env, i + 1, &exception);
+
+    if (exception) break;
+  }
+
+  if (exception) {
+    free(entries);
+
+    return js__propagate_exception_unless_pending(env, exception);
   }
 
   if (!JSValueIsUndefined(env->context, (JSValueRef) value)) {
@@ -4653,11 +4576,13 @@ js_open_continuation_variable_scope(js_env_t *env, js_value_t *symbol, js_value_
     // reads past its end, where a getter on the prototype could run.
     entries[len++] = JSValueMakeUndefined(env->context);
 
-    JSValueRef exception = NULL;
-
     snapshot = JSObjectMakeArray(env->context, len, entries, &exception);
 
-    assert(exception == NULL);
+    if (exception) {
+      free(entries);
+
+      return js__propagate_exception_unless_pending(env, exception);
+    }
 
     js__attach_to_handle_scope(env, env->scope, snapshot);
   } else {
@@ -4762,13 +4687,13 @@ js_get_value_int32(js_env_t *env, js_value_t *value, int32_t *result) {
   if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
     int32_t number = JSValueToInt32(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *result = number;
   } else {
     double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *result = (int32_t) number;
   }
@@ -4785,13 +4710,13 @@ js_get_value_uint32(js_env_t *env, js_value_t *value, uint32_t *result) {
   if (__builtin_available(macOS 15.0, iOS 18.0, *)) {
     uint32_t number = JSValueToUInt32(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *result = number;
   } else {
     double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *result = (uint32_t) number;
   }
@@ -4807,7 +4732,7 @@ js_get_value_int64(js_env_t *env, js_value_t *value, int64_t *result) {
 
   double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   if (!isfinite(number)) *result = 0;
   else if (number <= (double) INT64_MIN) *result = INT64_MIN;
@@ -4825,7 +4750,7 @@ js_get_value_double(js_env_t *env, js_value_t *value, double *result) {
 
   double number = JSValueToNumber(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   *result = number;
 
@@ -4839,7 +4764,7 @@ js_get_value_bigint_int64(js_env_t *env, js_value_t *value, int64_t *result, boo
 
     int64_t number = JSValueToInt64(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *result = number;
 
@@ -4849,17 +4774,14 @@ js_get_value_bigint_int64(js_env_t *env, js_value_t *value, int64_t *result, boo
     if (lossless != NULL) {
       JSValueRef roundtrip = JSBigIntCreateWithInt64(env->context, number, &exception);
 
-      assert(exception == NULL);
+      if (exception) return js__propagate_exception_unless_pending(env, exception);
 
       *lossless = JSValueIsStrictEqual(env->context, (JSValueRef) value, roundtrip);
     }
 
     return 0;
   } else {
-    int err;
-
-    err = js_throw_error(env, NULL, "Unsupported operation");
-    assert(err == 0);
+    js_throw_error(env, NULL, "Unsupported operation");
 
     return js__error(env);
   }
@@ -4872,7 +4794,7 @@ js_get_value_bigint_uint64(js_env_t *env, js_value_t *value, uint64_t *result, b
 
     uint64_t number = JSValueToUInt64(env->context, (JSValueRef) value, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *result = number;
 
@@ -4882,17 +4804,14 @@ js_get_value_bigint_uint64(js_env_t *env, js_value_t *value, uint64_t *result, b
     if (lossless != NULL) {
       JSValueRef roundtrip = JSBigIntCreateWithUInt64(env->context, number, &exception);
 
-      assert(exception == NULL);
+      if (exception) return js__propagate_exception_unless_pending(env, exception);
 
       *lossless = JSValueIsStrictEqual(env->context, (JSValueRef) value, roundtrip);
     }
 
     return 0;
   } else {
-    int err;
-
-    err = js_throw_error(env, NULL, "Unsupported operation");
-    assert(err == 0);
+    js_throw_error(env, NULL, "Unsupported operation");
 
     return js__error(env);
   }
@@ -4900,10 +4819,7 @@ js_get_value_bigint_uint64(js_env_t *env, js_value_t *value, uint64_t *result, b
 
 int
 js_get_value_bigint_words(js_env_t *env, js_value_t *value, int *sign, uint64_t *words, size_t len, size_t *result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -4930,7 +4846,7 @@ js_get_value_string_utf8(js_env_t *env, js_value_t *value, utf8_t *str, size_t l
 
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   size_t utf16_len = JSStringGetLength(ref);
 
@@ -4965,7 +4881,7 @@ js_get_value_string_utf16le(js_env_t *env, js_value_t *value, utf16_t *str, size
 
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   size_t utf16_len = JSStringGetLength(ref);
 
@@ -4996,7 +4912,7 @@ js_get_value_string_latin1(js_env_t *env, js_value_t *value, latin1_t *str, size
 
   JSStringRef ref = JSValueToStringCopy(env->context, (JSValueRef) value, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   size_t utf16_len = JSStringGetLength(ref);
 
@@ -5084,7 +5000,12 @@ js_get_array_elements(js_env_t *env, js_value_t *array, js_value_t **elements, s
 
   uint32_t m;
   err = js_get_array_length(env, array, &m);
-  assert(err == 0);
+
+  if (err < 0) {
+    env->depth--;
+
+    return err;
+  }
 
   for (uint32_t i = 0, n = len, j = offset; i < n && j < m; i++, j++) {
     JSValueRef value = JSObjectGetPropertyAtIndex(env->context, (JSObjectRef) array, j, &env->exception);
@@ -5249,10 +5170,7 @@ int
 js_get_filtered_property_names(js_env_t *env, js_value_t *object, js_key_collection_mode_t mode, js_property_filter_t property_filter, js_index_filter_t index_filter, js_key_conversion_mode_t key_conversion, js_value_t **result) {
   if (env->exception) return js__error(env);
 
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -5527,7 +5445,11 @@ js_get_string_view(js_env_t *env, js_value_t *string, js_string_encoding_t *enco
 
   view->value = JSValueToStringCopy(env->context, (JSValueRef) string, &exception);
 
-  assert(exception == NULL);
+  if (exception) {
+    free(view);
+
+    return js__propagate_exception_unless_pending(env, exception);
+  }
 
   if (encoding) *encoding = js_utf16le;
 
@@ -5612,11 +5534,11 @@ js_get_arraybuffer_info(js_env_t *env, js_value_t *arraybuffer, void **pdata, si
 
   uint8_t *data = JSObjectGetArrayBufferBytesPtr(env->context, (JSObjectRef) arraybuffer, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   size_t len = JSObjectGetArrayBufferByteLength(env->context, (JSObjectRef) arraybuffer, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   if (pdata) {
     *pdata = data;
@@ -5632,10 +5554,7 @@ js_get_arraybuffer_info(js_env_t *env, js_value_t *arraybuffer, void **pdata, si
 // https://bugs.webkit.org/show_bug.cgi?id=257709
 int
 js_get_sharedarraybuffer_info(js_env_t *env, js_value_t *sharedarraybuffer, void **data, size_t *len) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -5653,19 +5572,19 @@ js_get_typedarray_info(js_env_t *env, js_value_t *typedarray, js_typedarray_type
   if (pdata || poffset) {
     offset = JSObjectGetTypedArrayByteOffset(env->context, (JSObjectRef) typedarray, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
   }
 
   if (pdata || parraybuffer) {
     arraybuffer = JSObjectGetTypedArrayBuffer(env->context, (JSObjectRef) typedarray, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
   }
 
   if (ptype) {
     JSTypedArrayType type = JSValueGetTypedArrayType(env->context, (JSValueRef) typedarray, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *ptype = js__convert_to_typedarray_type(type);
   }
@@ -5673,7 +5592,7 @@ js_get_typedarray_info(js_env_t *env, js_value_t *typedarray, js_typedarray_type
   if (pdata) {
     void *data = JSObjectGetArrayBufferBytesPtr(env->context, arraybuffer, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *pdata = data + offset;
   }
@@ -5681,7 +5600,7 @@ js_get_typedarray_info(js_env_t *env, js_value_t *typedarray, js_typedarray_type
   if (plen) {
     size_t len = JSObjectGetTypedArrayLength(env->context, (JSObjectRef) typedarray, &exception);
 
-    assert(exception == NULL);
+    if (exception) return js__propagate_exception_unless_pending(env, exception);
 
     *plen = len;
   }
@@ -6163,15 +6082,13 @@ js_create_threadsafe_function(js_env_t *env, js_value_t *function, size_t queue_
   int err;
 
   if (function == NULL && cb == NULL) {
-    err = js_throw_error(env, NULL, "Either a function or a callback must be provided");
-    assert(err == 0);
+    js_throw_error(env, NULL, "Either a function or a callback must be provided");
 
     return js__error(env);
   };
 
   if (initial_thread_count == 0) {
-    err = js_throw_error(env, NULL, "Initial thread count must be greater than 0");
-    assert(err == 0);
+    js_throw_error(env, NULL, "Initial thread count must be greater than 0");
 
     return js__error(env);
   }
@@ -6311,11 +6228,8 @@ int
 js_add_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) {
   if (env->exception) return js__error(env);
 
-  int err;
-
   if (env->destroying) {
-    err = js_throw_error(env, NULL, "Teardown queue has already drained");
-    assert(err == 0);
+    js_throw_error(env, NULL, "Teardown queue has already drained");
 
     return js__error(env);
   }
@@ -6324,8 +6238,7 @@ js_add_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) {
     js_teardown_task_t *task = intrusive_entry(next, js_teardown_task_t, list);
 
     if (task->type == js_immediate_teardown && task->immediate.cb == callback && task->data == data) {
-      err = js_throw_error(env, NULL, "Teardown callback has already been registered");
-      assert(err == 0);
+      js_throw_error(env, NULL, "Teardown callback has already been registered");
 
       return js__error(env);
     }
@@ -6346,8 +6259,6 @@ int
 js_remove_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) {
   if (env->exception) return js__error(env);
 
-  int err;
-
   if (env->destroying) return 0;
 
   intrusive_list_for_each(next, &env->teardown_queue.tasks) {
@@ -6362,8 +6273,7 @@ js_remove_teardown_callback(js_env_t *env, js_teardown_cb callback, void *data) 
     }
   }
 
-  err = js_throw_error(env, NULL, "Teardown callback has not been registered");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Teardown callback has not been registered");
 
   return js__error(env);
 }
@@ -6372,11 +6282,8 @@ int
 js_add_deferred_teardown_callback(js_env_t *env, js_deferred_teardown_cb callback, void *data, js_deferred_teardown_t **result) {
   if (env->exception) return js__error(env);
 
-  int err;
-
   if (env->destroying) {
-    err = js_throw_error(env, NULL, "Teardown queue has already drained");
-    assert(err == 0);
+    js_throw_error(env, NULL, "Teardown queue has already drained");
 
     return js__error(env);
   }
@@ -6385,8 +6292,7 @@ js_add_deferred_teardown_callback(js_env_t *env, js_deferred_teardown_cb callbac
     js_teardown_task_t *task = intrusive_entry(next, js_teardown_task_t, list);
 
     if (task->type == js_deferred_teardown && task->deferred.cb == callback && task->data == data) {
-      err = js_throw_error(env, NULL, "Teardown callback has already been registered");
-      assert(err == 0);
+      js_throw_error(env, NULL, "Teardown callback has already been registered");
 
       return js__error(env);
     }
@@ -6482,7 +6388,7 @@ js_throw_error(js_env_t *env, const char *code, const char *message) {
 
   JSObjectRef error = JSObjectMakeError(env->context, 1, argv, &exception);
 
-  assert(exception == NULL);
+  if (exception) return js__propagate_exception_unless_pending(env, exception);
 
   if (code) {
     ref = JSStringCreateWithUTF8CString(code);
@@ -6877,30 +6783,21 @@ js_request_garbage_collection(js_env_t *env) {
 
 int
 js_enable_garbage_collection_tracking(js_env_t *env, const js_garbage_collection_tracking_options_t *options, void *data, js_garbage_collection_tracking_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
 
 int
 js_disable_garbage_collection_tracking(js_env_t *env, js_garbage_collection_tracking_t *tracking) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
 
 int
 js_get_heap_statistics(js_env_t *env, js_heap_statistics_t *result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -6914,20 +6811,14 @@ js_get_heap_space_statistics(js_env_t *env, js_heap_space_statistics_t statistic
 
 int
 js_create_inspector(js_env_t *env, js_inspector_t **result) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
 
 int
 js_destroy_inspector(js_env_t *env, js_inspector_t *inspector) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
@@ -6944,40 +6835,28 @@ js_on_inspector_paused(js_env_t *env, js_inspector_t *inspector, js_inspector_pa
 
 int
 js_connect_inspector(js_env_t *env, js_inspector_t *inspector) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
 
 int
 js_send_inspector_request(js_env_t *env, js_inspector_t *inspector, const char *message, size_t len) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
 
 int
 js_attach_context_to_inspector(js_env_t *env, js_inspector_t *inspector, js_context_t *context, const char *name, size_t len) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
 
 int
 js_detach_context_from_inspector(js_env_t *env, js_inspector_t *inspector, js_context_t *context) {
-  int err;
-
-  err = js_throw_error(env, NULL, "Unsupported operation");
-  assert(err == 0);
+  js_throw_error(env, NULL, "Unsupported operation");
 
   return js__error(env);
 }
