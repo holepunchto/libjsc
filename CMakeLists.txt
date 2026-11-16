@@ -1,24 +1,18 @@
 cmake_minimum_required(VERSION 4.0)
 
 find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
+find_package(cmake-prelude REQUIRED PATHS node_modules/cmake-prelude)
+find_package(cmake-test REQUIRED PATHS node_modules/cmake-test)
 
-project(js C)
+project(js LANGUAGES C VERSION 0.0.0)
 
-add_library(js OBJECT)
-
-fetch_package("github:holepunchto/libjs" SOURCE_DIR js)
 fetch_package("github:holepunchto/libintrusive")
 
-set_target_properties(
+add_library_targets(
   js
-  PROPERTIES
-  C_STANDARD 99
-  POSITION_INDEPENDENT_CODE ON
-)
-
-target_sources(
-  js
-  PRIVATE
+  FEATURES
+    c_std_99
+  SOURCES
     src/js.c
     src/jsc.h
     src/jsc/JSBasePrivate.h
@@ -31,78 +25,39 @@ target_sources(
     src/jsc/JSStringRefPrivate.h
     src/jsc/JSWeakObjectMapRefPrivate.h
     src/jsc/JSWeakPrivate.h
-)
-
-target_include_directories(
-  js
-  INTERFACE
-    include
-  PUBLIC
-    ${js}/include
-  PRIVATE
-    $<TARGET_PROPERTY:uv,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:utf,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:intrusive,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
-target_link_libraries(
-  js
-  PUBLIC
+  LINK
+    utf::<TYPE>
+  STATIC_LINK
+    uv_a
     "-framework CoreFoundation"
     "-framework JavaScriptCore"
-)
-
-add_library(js_shared SHARED)
-
-set_target_properties(
-  js_shared
-  PROPERTIES
-  OUTPUT_NAME js
-)
-
-target_include_directories(
-  js_shared
-  INTERFACE
-    $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
-target_link_libraries(
-  js_shared
-  PUBLIC
+  SHARED_LINK
     uv
-    utf_shared
-  PRIVATE
-    js
-)
-
-add_library(js_static STATIC)
-
-set_target_properties(
-  js_static
-  PROPERTIES
-  OUTPUT_NAME js
-  PREFIX lib
-)
-
-target_include_directories(
-  js_static
-  INTERFACE
-    $<TARGET_PROPERTY:js,INTERFACE_INCLUDE_DIRECTORIES>
+    "-framework CoreFoundation"
+    "-framework JavaScriptCore"
+  EXPORT OFF
 )
 
 target_link_libraries(
-  js_static
-  PUBLIC
-    uv_a
-    utf_static
+  js
   PRIVATE
-    js
+    intrusive::headers
 )
 
-install(TARGETS js_shared js_static)
+target_include_directories(
+  js_headers
+  INTERFACE
+    $<TARGET_PROPERTY:uv,INTERFACE_INCLUDE_DIRECTORIES>
+)
 
-if(PROJECT_IS_TOP_LEVEL)
-  enable_testing()
+fetch_package("github:holepunchto/libjs" SOURCE_DIR js)
 
-  add_subdirectory(test)
-endif()
+target_sources(
+  js_headers
+  INTERFACE
+    FILE_SET HEADERS
+    BASE_DIRS ${js}/include
+    FILES ${js}/include/js.h
+)
+
+add_test_subdirectory(test)
