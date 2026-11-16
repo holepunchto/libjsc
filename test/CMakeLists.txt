@@ -172,6 +172,7 @@ list(APPEND tests
   define-properties
   delete-element
   delete-property
+  destroy-context-with-finalizer
   dynamic-import
   dynamic-import-function-handler
   dynamic-import-handler-code-cache
@@ -365,6 +366,9 @@ list(APPEND tests
   set-prototype
   symbol-for
   terminate-execution
+  terminate-execution-call-api
+  terminate-execution-call-constructor
+  terminate-execution-call-function
   threadsafe-function-context-acquire
   threadsafe-function-ref-unref
   threads
