@@ -2509,7 +2509,9 @@ js_create_string_utf8(js_env_t *env, const utf8_t *str, size_t len, js_value_t *
 
   utf8_convert_to_utf16le(str, len, utf16);
 
-  ref = JSStringCreateWithCharactersNoCopy(utf16, utf16_len);
+  ref = JSStringCreateWithCharacters(utf16, utf16_len);
+
+  free(utf16);
 
   JSValueRef string = JSValueMakeString(env->context, ref);
 
@@ -2567,7 +2569,9 @@ js_create_string_latin1(js_env_t *env, const latin1_t *str, size_t len, js_value
 
   latin1_convert_to_utf16le(str, len, utf16);
 
-  ref = JSStringCreateWithCharactersNoCopy(utf16, utf16_len);
+  ref = JSStringCreateWithCharacters(utf16, utf16_len);
+
+  free(utf16);
 
   JSValueRef string = JSValueMakeString(env->context, ref);
 
@@ -3371,11 +3375,11 @@ int
 js_create_arraybuffer_with_backing_store(js_env_t *env, js_arraybuffer_backing_store_t *backing_store, void **data, size_t *len, js_value_t **result) {
   if (env->exception) return js__error(env);
 
+  backing_store->references++;
+
   JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, backing_store->data, backing_store->len, js__on_backed_arraybuffer_finalize, backing_store, &env->exception);
 
   if (env->exception) return js__propagate_exception(env);
-
-  backing_store->references++;
 
   *result = (js_value_t *) arraybuffer;
 
@@ -3405,11 +3409,7 @@ js_create_unsafe_arraybuffer(js_env_t *env, size_t len, void **data, js_value_t 
 
   JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, bytes, len, js__on_unsafe_arraybuffer_finalize, NULL, &env->exception);
 
-  if (env->exception) {
-    free(bytes);
-
-    return js__propagate_exception(env);
-  }
+  if (env->exception) return js__propagate_exception(env);
 
   *result = (js_value_t *) arraybuffer;
 
@@ -3446,11 +3446,7 @@ js_create_external_arraybuffer(js_env_t *env, void *data, size_t len, js_finaliz
 
   JSObjectRef arraybuffer = JSObjectMakeArrayBufferWithBytesNoCopy(env->context, data, len, js__on_external_arraybuffer_finalize, (void *) finalizer, &env->exception);
 
-  if (env->exception) {
-    free(finalizer);
-
-    return js__propagate_exception(env);
-  }
+  if (env->exception) return js__propagate_exception(env);
 
   *result = (js_value_t *) arraybuffer;
 
