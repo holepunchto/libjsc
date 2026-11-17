@@ -27,21 +27,15 @@ add_library_targets(
     src/jsc/JSWeakPrivate.h
   LINK
     utf::<TYPE>
-  STATIC_LINK
-    uv_a
-    "-framework CoreFoundation"
-    "-framework JavaScriptCore"
-  SHARED_LINK
-    uv
-    "-framework CoreFoundation"
-    "-framework JavaScriptCore"
+    PRIVATE
+      intrusive::headers
+      "-framework CoreFoundation"
+      "-framework JavaScriptCore"
+    STATIC
+      uv_a
+    SHARED
+      uv
   EXPORT OFF
-)
-
-target_link_libraries(
-  js
-  PRIVATE
-    intrusive::headers
 )
 
 target_include_directories(
