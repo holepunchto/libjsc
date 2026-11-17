@@ -3239,6 +3239,15 @@ js_get_error_location(js_env_t *env, js_value_t *error, js_error_location_t *res
   return 0;
 }
 
+static void
+js__destroy_deferred(js_env_t *env, js_deferred_t *deferred) {
+  JSValueUnprotect(env->context, deferred->promise);
+  JSValueUnprotect(env->context, deferred->resolve);
+  JSValueUnprotect(env->context, deferred->reject);
+
+  free(deferred);
+}
+
 int
 js_create_promise(js_env_t *env, js_deferred_t **deferred, js_value_t **promise) {
   if (env->exception) return js__error(env);
@@ -3256,6 +3265,10 @@ js_create_promise(js_env_t *env, js_deferred_t **deferred, js_value_t **promise)
   result->promise = value;
   result->resolve = resolve;
   result->reject = reject;
+
+  JSValueProtect(env->context, value);
+  JSValueProtect(env->context, resolve);
+  JSValueProtect(env->context, reject);
 
   *deferred = result;
   *promise = (js_value_t *) value;
@@ -3281,7 +3294,7 @@ js_resolve_deferred(js_env_t *env, js_deferred_t *deferred, js_value_t *resoluti
 
   env->depth--;
 
-  free(deferred);
+  js__destroy_deferred(env, deferred);
 
   if (exception) return js__propagate_call_exception(env, exception);
   else js__clear_termination_exception(env);
@@ -3311,7 +3324,7 @@ js_reject_deferred(js_env_t *env, js_deferred_t *deferred, js_value_t *resolutio
   // returned, so every rejection so far has been reported or handled.
   if (env->depth == 0) js__clear_rejections(env);
 
-  free(deferred);
+  js__destroy_deferred(env, deferred);
 
   if (exception) return js__propagate_call_exception(env, exception);
   else js__clear_termination_exception(env);
