@@ -25,7 +25,12 @@ add_test_executables(
   call-function-throw.c
   call-function-throw-in-task.c
   call-function-with-checkpoint.c
+  call-threadsafe-function-after-destroy-env.c
   call-threadsafe-function-after-release.c
+  call-threadsafe-function-blocking.c
+  call-threadsafe-function-burst.c
+  call-threadsafe-function-destroy-env.c
+  call-threadsafe-function-queue-limit.c
   call-threadsafe-function-with-data.c
   check-type-tag-from-prototype.c
   check-type-tag-not-tagged.c
@@ -74,6 +79,7 @@ add_test_executables(
   create-env-multiple-nested.c
   create-external.c
   create-external-arraybuffer.c
+  create-external-arraybuffer-backing-store-destroy-env.c
   create-external-arraybuffer-with-finalizer.c
   create-external-arraybuffer-with-finalizer-detach.c
   create-external-arraybuffer-with-finalizer-null.c
@@ -126,6 +132,9 @@ add_test_executables(
   create-sharedarraybuffer.c
   create-sharedarraybuffer-with-backing-store.c
   create-sharedarraybuffer-with-backing-store-across-envs.c
+  create-snapshot.c
+  create-snapshot-with-inspector.c
+  create-snapshot-with-threadsafe-function.c
   create-string-latin1.c
   create-string-too-long.c
   create-string-utf8.c
@@ -133,9 +142,13 @@ add_test_executables(
   create-string-utf16le.c
   create-synthetic-module-code-cache.c
   create-threadsafe-function.c
+  create-threadsafe-function-destroy-env.c
+  create-threadsafe-function-during-destroy-env.c
   create-threadsafe-function-with-callback.c
   create-threadsafe-function-with-context.c
   create-threadsafe-function-with-finalizer.c
+  create-threadsafe-function-with-finalizer-destroy-env.c
+  create-threadsafe-function-with-function-destroy-env.c
   create-typed-errors.c
   create-typed-function.c
   create-typed-function-call-throw.c
@@ -188,6 +201,7 @@ add_test_executables(
   dynamic-import-with-referrer-script.c
   dynamic-import-without-handler.c
   escapable-handle-scope.c
+  external-references.c
   fatal-exception.c
   fatal-exception-without-handler.c
   freeze.c
@@ -343,6 +357,20 @@ add_test_executables(
   reference-unref.c
   reference-unref-with-finalizer.c
   resolve-deferred-thenable-call-function-throw.c
+  run-from-snapshot.c
+  run-from-snapshot-add-finalizer.c
+  run-from-snapshot-continuation-variable.c
+  run-from-snapshot-delegate.c
+  run-from-snapshot-dynamic-import.c
+  run-from-snapshot-error-stack.c
+  run-from-snapshot-function.c
+  run-from-snapshot-import-meta.c
+  run-from-snapshot-module.c
+  run-from-snapshot-object-global.c
+  run-from-snapshot-script.c
+  run-from-snapshot-script-dynamic-import.c
+  run-from-snapshot-webassembly.c
+  run-from-snapshot-wrap.c
   run-module.c
   run-module-async.c
   run-module-cyclic-import.c
@@ -369,8 +397,10 @@ add_test_executables(
   terminate-execution-call-api.c
   terminate-execution-call-constructor.c
   terminate-execution-call-function.c
+  threadsafe-function-abort-blocked-call.c
   threadsafe-function-context-acquire.c
   threadsafe-function-ref-unref.c
+  threadsafe-function-release-concurrent.c
   threads.c
   threads-platform-loop.c
   throw-error.c
@@ -450,6 +480,26 @@ add_test_executables(
     inspector-response-throw.c
 
     # Not supported
+    create-snapshot.c
+    create-snapshot-with-inspector.c
+    create-snapshot-with-threadsafe-function.c
+    external-references.c
+    run-from-snapshot.c
+    run-from-snapshot-add-finalizer.c
+    run-from-snapshot-continuation-variable.c
+    run-from-snapshot-delegate.c
+    run-from-snapshot-dynamic-import.c
+    run-from-snapshot-error-stack.c
+    run-from-snapshot-function.c
+    run-from-snapshot-import-meta.c
+    run-from-snapshot-module.c
+    run-from-snapshot-object-global.c
+    run-from-snapshot-script.c
+    run-from-snapshot-script-dynamic-import.c
+    run-from-snapshot-webassembly.c
+    run-from-snapshot-wrap.c
+
+    # Not supported
     continuation-variable-promise-reaction.c
 
     # Not supported
@@ -520,6 +570,7 @@ add_test_executables(
     # way to keep it alive past the environment the buffer was created in.
     create-arraybuffer-with-backing-store-across-envs.c
     create-arraybuffer-with-backing-store-across-envs-script.c
+    create-external-arraybuffer-backing-store-destroy-env.c
 
     # https://bugs.webkit.org/show_bug.cgi?id=257709
     create-sharedarraybuffer.c
